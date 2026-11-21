@@ -7,6 +7,9 @@ config/secrets.env
 *.env
 !*.env.example
 
+# output ของเบราว์เซอร์ตอนตรวจหน้าเว็บ (ภาพ screenshot) ไม่ใช่ของงาน
+code/
+
 # Python
 __pycache__/
 *.pyc
