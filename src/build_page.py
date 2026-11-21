@@ -14,6 +14,9 @@
     แถวที่ถูกตัดไม่ถูกส่ง แต่ยอด 684 → include_pass → kept → dropped (แยกตามเหตุผล) อยู่ใน window.META.filters ตรวจย้อนได้
   · preset ชั้น A = ตัวกรองฝั่ง client (พื้นที่ · อายุประกาศ · เงินเดือน · โหมด · ซ่อน gone)
     ไม่ใช่ค่าชั้น B ใน config\\switches.json (limit.per_board 100/300 = wave 2) — switches.json ใช้แค่ชื่อ preset ที่ active
+  · คอลัมน์ "ทำเครื่องหมาย" = 📌 ปักหมุด / ✓ ดูแล้ว ต่อ job.id (localStorage: jobboard.pins · jobboard.seen)
+    เป็นชั้นแสดงผลเท่านั้น — ไม่เปลี่ยนจำนวนงาน ตรรกะกรอง preset หรือคะแนน · ปุ่ม "เปิดแผนที่" ส่ง ?pins=id1,id2
+  · localStorage ใช้ไม่ได้ (เช่น file:// ที่ถูกบล็อก) = เก็บในหน่วยความจำเฉพาะรอบนี้ ไม่ throw
   · ไม่มี path absolute ในไฟล์นี้: ROOT มาจาก __file__
 
 ใช้: python src\\build_page.py   → พิมพ์สรุป JSON (จำนวนแถวต่อ preset + ขนาดไฟล์)
@@ -465,6 +468,28 @@ td .loc{opacity:.75}
 .navlink{font-size:12.5px;color:var(--accent);text-decoration:none;border:1px solid var(--line);
  border-radius:6px;padding:3px 8px;background:#fff;white-space:nowrap}
 .navlink:hover{background:#f2f7ff}
+.mkbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;font-size:12.5px}
+.mkbar .lbl{color:var(--muted)}
+.markchip{border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:999px;padding:2px 9px;
+ font-size:12.5px;display:inline-flex;gap:5px;align-items:center;cursor:pointer}
+.markchip b{font-weight:600;color:var(--muted);font-size:11.5px}
+.markchip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.markchip[aria-pressed="true"] b{color:#dbe7ff}
+.markchip.zero{opacity:.55}
+#clearMarks{padding:2px 9px;border:1px solid var(--line);background:#fff;border-radius:999px;color:var(--muted);
+ font-size:12.5px;cursor:pointer}
+td.mark{white-space:nowrap;width:1%}
+.mk{font:inherit;font-size:11.5px;line-height:1.6;border:1px solid var(--line);background:#fff;color:var(--muted);
+ border-radius:6px;padding:1px 6px;cursor:pointer;white-space:nowrap}
+.mk+.mk{margin-left:4px}
+.mk[aria-pressed="true"]{color:#fff}
+.mk.pinbtn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent)}
+.mk.seenbtn[aria-pressed="true"]{background:#166534;border-color:#166534}
+tbody tr.pinned{box-shadow:inset 3px 0 0 var(--accent);background:#f5f9ff}
+tbody tr.pinned td.title{color:#0b3d91}
+tbody tr.seen{opacity:.62}
+tbody tr.seen td.title{text-decoration:line-through}
+tbody tr.pinned.seen{opacity:.82}
 [hidden]{display:none !important}
 </style>
 </head>
@@ -473,7 +498,7 @@ td .loc{opacity:.75}
   <div class="title-row">
     <h1>หางาน IT กรุงเทพ</h1>
     <span class="tag">job board · รันในเครื่อง 100%</span>
-    <a class="navlink" id="maplink" href="map.html">แผนที่บริษัท →</a>
+    <a class="navlink" id="maplink" href="map.html">เปิดแผนที่ (0 หมุด)</a>
     <span class="meta">ข้อมูล: <strong id="gen">-</strong> · แสดง <strong id="count">0</strong> / <span id="total">0</span> แถว <span class="tag">(N = หลังกรอง preset · M = ผ่าน include)</span></span>
   </div>
   <div class="controls">
@@ -481,6 +506,14 @@ td .loc{opacity:.75}
     <label>ค้น <input id="q" type="search" placeholder="ตำแหน่ง · บริษัท · เขต · สกิล"></label>
     <button id="reset" type="button">ล้างตัวกรอง</button>
     <label><input id="hidegone" type="checkbox"> ซ่อน gone</label>
+  </div>
+  <div class="mkbar" id="mkbar">
+    <span class="lbl">เครื่องหมาย:</span>
+    <button type="button" class="markchip zero" id="chipPins" aria-pressed="false">📌 ปักหมุดแล้ว <b>0</b></button>
+    <button type="button" class="markchip zero" id="chipUnseen" aria-pressed="false">ยังไม่ดู <b>0</b></button>
+    <button type="button" class="markchip zero" id="chipSeen" aria-pressed="false">ดูแล้ว <b>0</b></button>
+    <button type="button" id="clearMarks">ล้างเครื่องหมาย</button>
+    <span class="lbl" id="mknote" hidden></span>
   </div>
   <div id="warn" class="warnbox" hidden></div>
   <div id="filtersum" class="areacounts"></div>
@@ -497,7 +530,7 @@ td .loc{opacity:.75}
     <thead>
       <tr>
         <th>คะแนน</th><th>ตำแหน่ง</th><th>บริษัท</th><th>เขต / จังหวัด</th>
-        <th>เงินเดือน</th><th>โหมด</th><th>แหล่ง</th><th>วันที่โพสต์</th>
+        <th>เงินเดือน</th><th>โหมด</th><th>แหล่ง</th><th>วันที่โพสต์</th><th>ทำเครื่องหมาย</th>
       </tr>
     </thead>
     <tbody id="rows"></tbody>
@@ -699,6 +732,54 @@ td .loc{opacity:.75}
                      ['other', 'พื้นที่อื่น'], ['unknown', 'พื้นที่ไม่ระบุ']];
   function $(id) { return document.getElementById(id); }
 
+  /* ---------- เครื่องหมาย: 📌 ปักหมุด / ✓ ดูแล้ว (ต่อ job.id) ----------
+     เก็บใน localStorage['jobboard.pins'] / ['jobboard.seen'] = JSON array ของ id
+     localStorage ใช้ไม่ได้ (เช่น file:// ที่ถูกบล็อก) = เก็บในหน่วยความจำเฉพาะรอบนี้ ไม่ throw */
+  var PINS_KEY = 'jobboard.pins';
+  var SEEN_KEY = 'jobboard.seen';
+  var storeOK = (function () {
+    try {
+      var probe = '__jobboard_probe__';
+      localStorage.setItem(probe, '1');
+      localStorage.removeItem(probe);
+      return true;
+    } catch (e) { return false; }
+  })();
+
+  function readIds(key) {
+    if (!storeOK) return [];
+    try {
+      var raw = localStorage.getItem(key);
+      var arr = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(arr)) return [];
+      var out = [];
+      arr.forEach(function (v) {
+        var s = String(v == null ? '' : v);
+        if (s && out.indexOf(s) < 0) out.push(s);
+      });
+      return out;
+    } catch (e) { return []; }
+  }
+
+  function writeIds(key, list) {
+    if (!storeOK) return;
+    try { localStorage.setItem(key, JSON.stringify(list)); } catch (e) { /* ไม่เป็นไร */ }
+  }
+
+  function hasId(list, id) { return list.indexOf(String(id == null ? '' : id)) >= 0; }
+
+  function toggleId(list, id) {
+    var s = String(id);
+    var at = list.indexOf(s);
+    var out = list.slice();
+    if (at >= 0) out.splice(at, 1); else out.push(s);
+    return out;
+  }
+
+  var pinIds = readIds(PINS_KEY);
+  var seenIds = readIds(SEEN_KEY);
+  var marksOnly = { pins: false, seen: null };  /* ชั้นแสดงผลเท่านั้น: seen = null | 'seen' | 'unseen' */
+
   function presetNames() {
     var names = Object.keys(PRESETS);
     names.sort(function (a, b) { return (PRESETS[a].order || 0) - (PRESETS[b].order || 0); });
@@ -840,13 +921,54 @@ td .loc{opacity:.75}
     return { primary: primary, extra: extra };
   }
 
+  /* ตัวกรองของเครื่องหมาย = ชั้นแสดงผล ทับหลัง V.filterJobs (ไม่แตะ JOBS/ตรรกะกรอง/preset) */
+  function markFiltered(rows) {
+    if (!marksOnly.pins && !marksOnly.seen) return rows;
+    return rows.filter(function (job) {
+      var id = String(job.id == null ? '' : job.id);
+      if (marksOnly.pins && !hasId(pinIds, id)) return false;
+      if (marksOnly.seen === 'seen' && !hasId(seenIds, id)) return false;
+      if (marksOnly.seen === 'unseen' && hasId(seenIds, id)) return false;
+      return true;
+    });
+  }
+
+  function markButton(kind, id, pressed) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'mk ' + (kind === 'pin' ? 'pinbtn' : 'seenbtn');
+    btn.dataset.mark = kind;
+    btn.dataset.jobId = id;
+    btn.setAttribute(kind === 'pin' ? 'data-pin' : 'data-seen', id);
+    btn.id = (kind === 'pin' ? 'pin-' : 'seen-') + id;
+    btn.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+    btn.title = (kind === 'pin' ? 'ปักหมุดงานนี้ (แสดงในแผนที่): ' : 'ทำเครื่องหมายว่าดูแล้ว: ') + id;
+    btn.textContent = kind === 'pin'
+      ? (pressed ? '📌 ปักแล้ว' : '📌 ปักหมุด')
+      : '✓ ดูแล้ว';
+    return btn;
+  }
+
+  function markCell(job) {
+    var id = String(job.id == null ? '' : job.id);
+    var td = document.createElement('td');
+    td.className = 'mark';
+    td.appendChild(markButton('pin', id, hasId(pinIds, id)));
+    td.appendChild(markButton('seen', id, hasId(seenIds, id)));
+    return td;
+  }
+
   function renderTable() {
     var body = $('rows');
     body.textContent = '';
-    var rows = V.sortJobs(V.filterJobs(state));
+    var rows = markFiltered(V.sortJobs(V.filterJobs(state)));
     rows.forEach(function (job) {
       var tr = document.createElement('tr');
       tr.tabIndex = 0;
+      var rowId = String(job.id == null ? '' : job.id);
+      tr.dataset.jobId = rowId;
+      if (hasId(pinIds, rowId)) tr.className = 'pinned';
+      if (hasId(seenIds, rowId)) tr.className = (tr.className ? tr.className + ' ' : '') + 'seen';
       if (job.url) {
         tr.dataset.url = job.url;
         tr.title = 'เปิดประกาศ: ' + (job.title || '');
@@ -908,6 +1030,8 @@ td .loc{opacity:.75}
       td.textContent = job.posted_at || '';
       tr.appendChild(td);
 
+      tr.appendChild(markCell(job));
+
       body.appendChild(tr);
     });
     return rows.length;
@@ -939,6 +1063,49 @@ td .loc{opacity:.75}
       b.textContent = String(typeof counts[pair[0]] === 'number' ? counts[pair[0]] : 0);
       box.appendChild(b);
     });
+  }
+
+  /* ชิปนับ + ลิงก์แผนที่: นับจาก JOBS ที่โหลดมา (จำนวนงานไม่เปลี่ยน) */
+  function knownPins() {
+    var byId = {};
+    JOBS.forEach(function (job) { byId[String(job.id == null ? '' : job.id)] = true; });
+    return pinIds.filter(function (id) { return byId[id]; });
+  }
+
+  function renderMarks() {
+    var ids = knownPins();
+    var pinsN = ids.length;
+    var seenN = 0;
+    JOBS.forEach(function (job) { if (hasId(seenIds, String(job.id == null ? '' : job.id))) seenN++; });
+    var unseenN = JOBS.length - seenN;
+
+    function chip(id, on, n) {
+      var node = $(id);
+      if (!node) return;
+      node.setAttribute('aria-pressed', on ? 'true' : 'false');
+      node.className = 'markchip' + (n ? '' : ' zero');
+      var badge = node.querySelector('b');
+      if (badge) badge.textContent = String(n);
+    }
+    chip('chipPins', marksOnly.pins, pinsN);
+    chip('chipUnseen', marksOnly.seen === 'unseen', unseenN);
+    chip('chipSeen', marksOnly.seen === 'seen', seenN);
+
+    var link = $('maplink');
+    if (link) {
+      link.textContent = 'เปิดแผนที่ (' + pinsN + ' หมุด)';
+      link.href = 'map.html' + (pinsN ? '?pins=' + ids.map(encodeURIComponent).join(',') : '');
+    }
+    var note = $('mknote');
+    if (note) {
+      if (storeOK) {
+        note.hidden = true;
+        note.textContent = '';
+      } else {
+        note.hidden = false;
+        note.textContent = 'บันทึกเครื่องหมายไม่ได้ (localStorage ใช้ไม่ได้) — ใช้ได้เฉพาะรอบนี้';
+      }
+    }
   }
 
   function renderFooter() {
@@ -974,6 +1141,7 @@ td .loc{opacity:.75}
       $('tbl').hidden = true;
       $('noresult').hidden = true;
       $('count').textContent = '0';
+      renderMarks();
       renderFilterSum();
       renderFooter();
       return;
@@ -991,6 +1159,7 @@ td .loc{opacity:.75}
     renderFilterSum();
     renderAreaCounts();
     renderFilters();
+    renderMarks();
     var shown = renderTable();
     $('count').textContent = String(shown);
     $('noresult').hidden = shown !== 0;
@@ -1009,11 +1178,32 @@ td .loc{opacity:.75}
     if (group) toggleChip(group, chipValue(group, chip.dataset.value));
   });
 
+  function toggleMark(kind, id) {
+    var s = String(id == null ? '' : id);
+    if (!s) return;
+    if (kind === 'pin') {
+      pinIds = toggleId(pinIds, s);
+      writeIds(PINS_KEY, pinIds);
+    } else {
+      seenIds = toggleId(seenIds, s);
+      writeIds(SEEN_KEY, seenIds);
+    }
+    renderAll();
+    var again = document.getElementById((kind === 'pin' ? 'pin-' : 'seen-') + s);
+    if (again) { try { again.focus(); } catch (e) { /* ไม่เป็นไร */ } }
+  }
+
   $('rows').addEventListener('click', function (ev) {
+    var btn = ev.target.closest ? ev.target.closest('button.mk') : null;
+    if (btn) {
+      toggleMark(btn.dataset.mark, btn.dataset.jobId);
+      return;
+    }
     openRow(ev.target.closest ? ev.target.closest('tr') : null);
   });
 
   $('rows').addEventListener('keydown', function (ev) {
+    if (ev.target.closest && ev.target.closest('button')) return;
     if (ev.key !== 'Enter' && ev.key !== ' ') return;
     var tr = ev.target.closest ? ev.target.closest('tr') : null;
     if (!tr || !tr.dataset.url) return;
@@ -1042,6 +1232,31 @@ td .loc{opacity:.75}
   $('hidegone').addEventListener('change', function (ev) {
     state.hide_gone = ev.target.checked;
     saveState();
+    renderAll();
+  });
+
+  if ($('chipPins')) $('chipPins').addEventListener('click', function () {
+    marksOnly.pins = !marksOnly.pins;
+    renderAll();
+  });
+
+  if ($('chipUnseen')) $('chipUnseen').addEventListener('click', function () {
+    marksOnly.seen = marksOnly.seen === 'unseen' ? null : 'unseen';
+    renderAll();
+  });
+
+  if ($('chipSeen')) $('chipSeen').addEventListener('click', function () {
+    marksOnly.seen = marksOnly.seen === 'seen' ? null : 'seen';
+    renderAll();
+  });
+
+  if ($('clearMarks')) $('clearMarks').addEventListener('click', function () {
+    pinIds = [];
+    seenIds = [];
+    writeIds(PINS_KEY, pinIds);
+    writeIds(SEEN_KEY, seenIds);
+    marksOnly.pins = false;
+    marksOnly.seen = null;
     renderAll();
   });
 

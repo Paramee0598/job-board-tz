@@ -93,12 +93,42 @@ def company_jobs(entry: dict, index: dict, cfg: dict) -> list:
         except Exception:
             score = 0
         out.append({
+            "id": str(job.get("id") or ""),
             "title": str(job.get("title") or ""),
             "score": score,
             "url": str(job.get("url") or ""),
             "posted_at": str(job.get("posted_at") or ""),
         })
     out.sort(key=lambda item: (-item["score"], item["title"]))
+    return out
+
+
+def job_lookup(entries: list, index: dict, cfg: dict) -> dict:
+    """ดัชนีงานทั้งชุด (id → ชื่อ/บริษัท/คะแนน/url) สำหรับแผง "งานที่ปักหมุดไว้".
+
+    ครอบทั้งบริษัทที่ขึ้นแผนที่และไม่ขึ้น — งานที่ปักอาจอยู่บริษัทนอกกรุงเทพ
+    ฝังใน payload ตอน build เพื่อให้หน้าเว็บทำงานแบบไฟล์เดียวจบ (ไม่ fetch)
+    """
+    out = {}
+    for entry in entries:
+        company = str(entry.get("company") or "").strip()
+        for job_id in entry.get("job_ids") or []:
+            key = str(job_id)
+            if key in out:
+                continue
+            job = index.get(key)
+            if not job:
+                continue
+            try:
+                score = int(filters_mod.score(job, cfg))
+            except Exception:
+                score = 0
+            out[key] = {
+                "title": str(job.get("title") or ""),
+                "company": company,
+                "score": score,
+                "url": str(job.get("url") or ""),
+            }
     return out
 
 
@@ -153,6 +183,7 @@ def build_payload(entries: list, index: dict, cfg: dict) -> dict:
         "map_id": MAP_ID,
         "companies": on_map,
         "off_map": off_map,
+        "jobs": job_lookup(entries, index, cfg),
         "counts": {
             "total": len(entries),
             "on_map": len(on_map),
@@ -321,7 +352,7 @@ MAP_TEMPLATE = r"""<!DOCTYPE html>
 <title>บริษัทในประกาศงาน — แผนที่กรุงเทพ</title>
 <style>
 :root{--bg:#f7f8fa;--card:#fff;--ink:#1c2128;--muted:#6b7280;--line:#e3e6ea;--accent:#1f6feb;
- --exact:#1f6feb;--approx:#b45309;--chip:#eef1f5;--warn:#fff7ed;--warnline:#fed7aa;--warnink:#9a3412}
+ --exact:#1f6feb;--approx:#b45309;--pin:#d1242f;--chip:#eef1f5;--warn:#fff7ed;--warnline:#fed7aa;--warnink:#9a3412}
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;height:100%}
 body{background:var(--bg);color:var(--ink);font-size:14px;line-height:1.45;display:flex;flex-direction:column;
@@ -364,6 +395,26 @@ aside .hint{margin:0;padding:8px 12px;font-size:12px;color:var(--muted);border-b
  box-shadow:0 1px 3px rgba(0,0,0,.35)}
 .pin.exact{background:var(--exact)}
 .pin.approx{background:var(--approx)}
+.pinwrap{position:relative;display:inline-flex;align-items:center;justify-content:center}
+.pinwrap.pinned .pin{background:var(--pin);width:34px;height:34px;font-size:13.5px;border-width:3px;
+ box-shadow:0 0 0 3px #fff,0 2px 7px rgba(0,0,0,.45)}
+.pinbadge{display:none;position:absolute;top:-9px;right:-12px;background:#fff;border:1px solid var(--pin);
+ color:var(--pin);font-size:10.5px;font-weight:700;border-radius:999px;padding:0 4px;line-height:15px;white-space:nowrap}
+.pinwrap.pinned .pinbadge{display:block}
+.iw-jobs li.iw-pinned{background:#fff5f5;font-weight:600}
+.iw-pinmark{color:var(--pin);font-size:11px;font-weight:700;flex:0 0 auto}
+.pinbox{flex:0 0 auto;display:flex;flex-direction:column;min-height:0;max-height:48%;border-bottom:1px solid var(--line)}
+#pinlist{list-style:none;margin:0;padding:0;overflow:auto;flex:1 1 auto}
+#pinlist li{display:flex;flex-direction:column;gap:2px;padding:8px 12px;border-bottom:1px solid var(--line)}
+#pinlist .pj-title{font-weight:600}
+#pinlist .pj-title a{color:var(--accent);text-decoration:none}
+#pinlist .pj-title a:hover{text-decoration:underline}
+#pinlist .pj-meta{font-size:11.5px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap}
+#pinlist .pj-remove{align-self:flex-start;margin-top:3px;font:inherit;font-size:11.5px;border:1px solid var(--line);
+ background:#fff;color:var(--muted);border-radius:6px;padding:1px 6px;cursor:pointer}
+#pinlist .pj-remove:hover{border-color:var(--pin);color:var(--pin)}
+#pinlist .empty,#pinlist li.empty{padding:10px 12px;color:var(--muted);font-size:12.5px}
+.offbox{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
 .iw{max-width:320px;font-size:13px;color:var(--ink);font-family:inherit}
 .iw-name{font-weight:700;font-size:14px;margin-bottom:2px}
 .iw-addr{color:var(--muted);font-size:12.5px;margin-bottom:4px}
@@ -399,6 +450,7 @@ footer a{display:inline-block;padding:4px 2px;line-height:16px}
     <span>บนแผนที่ <b>__N_ONMAP__</b></span>
     <span>ไม่พบบนแผนที่ <b>__N_OFFMAP__</b></span>
     <span>งานในบริษัทเหล่านี้ <b>__N_JOBS__</b></span>
+    <span>งานที่ปักหมุด <b id="pinStat">0</b></span>
   </div>
   <div class="legend">
     <span><span class="dot exact"></span>ตรงชื่อบริษัท + อยู่กรุงเทพ (__N_EXACT__)</span>
@@ -410,10 +462,17 @@ footer a{display:inline-block;padding:4px 2px;line-height:16px}
 <main>
   <div id="map"></div>
   <aside>
-    <h2>ไม่ปรากฏบนแผนที่ <span>__N_OFFMAP__ บริษัท</span></h2>
-    <p class="hint">หมุดขึ้นเฉพาะบริษัทที่ Google ยืนยันว่าอยู่ในกรุงเทพ — ที่เหลือแสดงที่นี่พร้อมเหตุผล</p>
-    <div id="maperr" hidden></div>
-    <ul id="offlist">__OFFMAP_ROWS__</ul>
+    <div class="pinbox">
+      <h2>งานที่ปักหมุดไว้ (<span id="pinCount">0</span>) <span>จาก dashboard · ?pins=</span></h2>
+      <p class="hint">ปักหมุดจาก dashboard ด้วยปุ่ม 📌 — หมุดของบริษัทที่มีงานถูกปักจะเด่นขึ้น (ไม่เพิ่มหมุดใหม่)</p>
+      <ul id="pinlist"></ul>
+    </div>
+    <div class="offbox">
+      <h2>ไม่ปรากฏบนแผนที่ <span>__N_OFFMAP__ บริษัท</span></h2>
+      <p class="hint">หมุดขึ้นเฉพาะบริษัทที่ Google ยืนยันว่าอยู่ในกรุงเทพ — ที่เหลือแสดงที่นี่พร้อมเหตุผล</p>
+      <div id="maperr" hidden></div>
+      <ul id="offlist">__OFFMAP_ROWS__</ul>
+    </div>
   </aside>
 </main>
 <footer>
@@ -428,6 +487,7 @@ window.MAPDATA = __MAPDATA__;
   var DATA = window.MAPDATA || { companies: [], counts: {} };
   var EXACT_COLOR = '#1f6feb';
   var APPROX_COLOR = '#b45309';
+  var PIN_COLOR = '#d1242f';
   var READY = false;
 
   function notice(message) {
@@ -453,6 +513,155 @@ window.MAPDATA = __MAPDATA__;
     return /^https?:\/\//i.test(String(value || '')) ? String(value) : '';
   }
 
+  /* ---------- ปักหมุด: ไฮไลต์บริษัทเดิมเท่านั้น ไม่เพิ่มหมุดใหม่ ----------
+     อ่าน: localStorage['jobboard.pins'] (ค่าเริ่มต้น) · ?pins=id1,id2 (ถ้ามี = ทับ)
+     ลบในแผง = ออกจาก localStorage + URL · localStorage ใช้ไม่ได้ = อยู่ในหน่วยความจำ */
+  var PINS_KEY = 'jobboard.pins';
+  var JOBS = DATA.jobs || {};
+  var records = [];
+
+  function dedupe(list) {
+    var out = [];
+    (list || []).forEach(function (value) {
+      var s = String(value === undefined || value === null ? '' : value).trim();
+      if (s && out.indexOf(s) < 0) out.push(s);
+    });
+    return out;
+  }
+
+  function readStored() {
+    try {
+      var raw = localStorage.getItem(PINS_KEY);
+      var arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? dedupe(arr) : [];
+    } catch (e) { return []; }
+  }
+
+  function writeStored(list) {
+    try { localStorage.setItem(PINS_KEY, JSON.stringify(list)); } catch (e) { /* localStorage ปิด (file:// ที่บล็อก) */ }
+  }
+
+  function queryPins() {
+    var search = '';
+    try { search = String(window.location.search || ''); } catch (e) { return null; }
+    if (!search || search === '?') return null;
+    try {
+      var params = new URLSearchParams(search);
+      if (!params.has('pins')) return null;
+      return dedupe(String(params.get('pins') || '').split(','));
+    } catch (e) { return null; }
+  }
+
+  var fromQuery = queryPins();
+  var pins = fromQuery === null ? readStored() : fromQuery;
+  if (fromQuery !== null) writeStored(pins);  /* ให้ dashboard เห็นชุดเดียวกัน */
+
+  function isPinned(id) {
+    return pins.indexOf(String(id === undefined || id === null ? '' : id)) >= 0;
+  }
+
+  function countPinned(company) {
+    var n = 0;
+    (company.jobs || []).forEach(function (job) { if (isPinned(job.id)) n++; });
+    return n;
+  }
+
+  function syncUrl() {
+    try {
+      if (!window.history || typeof history.replaceState !== 'function') return;
+      var qs = pins.length ? '?pins=' + pins.map(encodeURIComponent).join(',') : '';
+      history.replaceState(null, '', window.location.pathname + qs + (window.location.hash || ''));
+    } catch (e) { /* file:// หรือ sandbox ปิดประวัติ — ไม่เป็นไร */ }
+  }
+
+  function pinItem(id) {
+    var job = JOBS[id];
+    var li = el('li');
+    if (!job) {
+      li.className = 'missing';
+      li.appendChild(el('span', 'pj-title', id));
+      li.appendChild(el('span', 'pj-meta', 'ไม่พบงานนี้ใน data\\companies.json (อาจถูกตัดออกหรือเปลี่ยน id)'));
+    } else {
+      var title = el('span', 'pj-title');
+      var url = safeUrl(job.url);
+      if (url) {
+        var link = el('a', null, job.title || '(ไม่มีชื่อตำแหน่ง)');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        title.appendChild(link);
+      } else {
+        title.textContent = job.title || '(ไม่มีชื่อตำแหน่ง)';
+      }
+      li.appendChild(title);
+      var meta = el('span', 'pj-meta');
+      meta.appendChild(el('span', null, job.company || '(ไม่ทราบบริษัท)'));
+      meta.appendChild(el('span', null, 'คะแนน ' + (typeof job.score === 'number' ? job.score : 0)));
+      li.appendChild(meta);
+    }
+    var remove = el('button', 'pj-remove', 'เอาเครื่องหมายออก');
+    remove.type = 'button';
+    remove.dataset.jobId = id;
+    remove.setAttribute('aria-label', 'เอาเครื่องหมายออก: ' + (job && job.title ? job.title : id));
+    li.appendChild(remove);
+    return li;
+  }
+
+  function renderPanel() {
+    var list = document.getElementById('pinlist');
+    var stat = document.getElementById('pinStat');
+    var head = document.getElementById('pinCount');
+    if (stat) stat.textContent = String(pins.length);
+    if (head) head.textContent = String(pins.length);
+    if (!list) return;
+    list.textContent = '';
+    if (!pins.length) {
+      list.appendChild(el('li', 'empty', 'ยังไม่มีงานที่ปักหมุด — กด 📌 ที่ dashboard แล้วเปิดหน้านี้ หรือส่ง ?pins=id1,id2 มา'));
+      return;
+    }
+    pins.forEach(function (id) { list.appendChild(pinItem(id)); });
+  }
+
+  function paintCompany(rec) {
+    var on = countPinned(rec.company);
+    var total = (rec.company.jobs || []).length;
+    if (rec.kind === 'adv') {
+      rec.wrap.className = 'pinwrap' + (on > 0 ? ' pinned' : '');
+      rec.wrap.setAttribute('data-pinned', on > 0 ? 'true' : 'false');
+      rec.wrap.setAttribute('data-pinned-count', String(on));
+      rec.wrap.setAttribute('data-company', rec.company.company);
+      rec.pin.setAttribute('aria-label', rec.company.company
+        + (on > 0 ? ' · ปักหมุด ' + on + ' งาน' : ' · ' + total + ' งาน'));
+      rec.badge.textContent = on > 0 ? '📌 ' + on : '';
+      if (rec.marker) { try { rec.marker.zIndex = on > 0 ? 9000 : 1; } catch (e) { /* ไม่เป็นไร */ } }
+      return;
+    }
+    if (!rec.marker) return;
+    try {
+      rec.marker.setIcon({
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: on > 0 ? 12 : 8,
+        fillColor: on > 0 ? PIN_COLOR : (rec.exact ? EXACT_COLOR : APPROX_COLOR),
+        fillOpacity: 1,
+        strokeColor: '#ffffff',
+        strokeWeight: on > 0 ? 3 : 2
+      });
+      rec.marker.setZIndex(on > 0 ? 9000 : 1);
+      rec.marker.setTitle(rec.company.company + (on > 0 ? ' · ปักหมุด ' + on + ' งาน' : ''));
+    } catch (e) { /* ไม่เป็นไร */ }
+  }
+
+  function paintAll() { records.forEach(paintCompany); }
+
+  function removePin(id) {
+    var key = String(id === undefined || id === null ? '' : id);
+    pins = pins.filter(function (value) { return value !== key; });
+    writeStored(pins);
+    syncUrl();
+    renderPanel();
+    paintAll();
+  }
+
   function infoNode(company) {
     var box = el('div', 'iw');
     box.appendChild(el('div', 'iw-name', company.company));
@@ -463,7 +672,8 @@ window.MAPDATA = __MAPDATA__;
     var jobs = company.jobs || [];
     var list = el('ul', 'iw-jobs');
     jobs.forEach(function (job) {
-      var row = el('li');
+      var pinned = isPinned(job.id);
+      var row = el('li', pinned ? 'iw-pinned' : null);
       var url = safeUrl(job.url);
       var link = url ? el('a', null, job.title || '(ไม่มีชื่อตำแหน่ง)') : el('span', null, job.title || '(ไม่มีชื่อตำแหน่ง)');
       if (url) {
@@ -472,6 +682,7 @@ window.MAPDATA = __MAPDATA__;
         link.rel = 'noopener noreferrer';
       }
       row.appendChild(link);
+      if (pinned) row.appendChild(el('span', 'iw-pinmark', '📌 ปักหมุด'));
       row.appendChild(el('span', 'iw-score', 'คะแนน ' + (typeof job.score === 'number' ? job.score : 0)));
       list.appendChild(row);
     });
@@ -508,16 +719,22 @@ window.MAPDATA = __MAPDATA__;
       info.setContent(infoNode(company));
       info.open({ map: map, anchor: anchor });
     }
+    records = [];
     (DATA.companies || []).forEach(function (company) {
       if (typeof company.lat !== 'number' || typeof company.lng !== 'number') return;
       var position = { lat: company.lat, lng: company.lng };
       var exact = company.accuracy === 'exact';
-      var marker;
+      var marker, rec;
       if (Advanced) {
+        var wrap = el('div', 'pinwrap');
         var pin = el('div', 'pin ' + (exact ? 'exact' : 'approx'), String((company.jobs || []).length));
         pin.setAttribute('role', 'button');
         pin.setAttribute('aria-label', company.company);
-        marker = new Advanced({ map: map, position: position, title: company.company, content: pin });
+        var badge = el('span', 'pinbadge', '');
+        wrap.appendChild(pin);
+        wrap.appendChild(badge);
+        marker = new Advanced({ map: map, position: position, title: company.company, content: wrap });
+        rec = { kind: 'adv', wrap: wrap, pin: pin, badge: badge, marker: marker, company: company, exact: exact };
       } else {
         marker = new google.maps.Marker({
           map: map,
@@ -532,11 +749,24 @@ window.MAPDATA = __MAPDATA__;
             strokeWeight: 2
           }
         });
+        rec = { kind: 'legacy', marker: marker, company: company, exact: exact };
       }
       marker.addListener('click', function () { openInfo(company, marker); });
+      records.push(rec);
+      paintCompany(rec);
     });
     READY = true;
   };
+
+  var pinList = document.getElementById('pinlist');
+  if (pinList) {
+    pinList.addEventListener('click', function (ev) {
+      var btn = ev.target.closest ? ev.target.closest('button.pj-remove') : null;
+      if (!btn) return;
+      removePin(btn.dataset.jobId);
+    });
+  }
+  renderPanel();
 
   window.addEventListener('load', function () {
     setTimeout(function () {
