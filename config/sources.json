@@ -1,0 +1,60 @@
+{
+  "_note": "เพดานต่อแหล่งตาม brief-jobboard-v3 §5. JobSpy (linkedin/indeed/jobsdb/google) = ฟรี. Apify (jobthai/jobtopgun/facebook) = wave 2, ยังไม่มี token.",
+  "facebook": {
+    "groups": [
+      "https://www.facebook.com/groups/744726133758655/",
+      "https://www.facebook.com/groups/700493471102196/",
+      "https://www.facebook.com/groups/1096603433739674/"
+    ],
+    "keywords": ["developer", "programmer", "ไอที", "security", "pentest", "devops", "data", "qa"],
+    "onlyPostsNewerThan": "2 days",
+    "resultsLimit": 150,
+    "viewOption": "CHRONOLOGICAL"
+  },
+  "jobspy": {
+    "_note": "เป้า = สาย cloud / DevOps / infrastructure / virtualization. คลังคำนี้คือ pool สำหรับรันหลายรอบ — §5 ห้ามยิงทั้ง pool ในรันเดียว (linkedin 1 คำ/วัน): ผู้รันต้องส่ง --keywords เป็นชุดย่อย",
+    "sites": ["linkedin", "indeed", "jobsdb", "google"],
+    "keywords": [
+      "devops",
+      "cloud engineer",
+      "site reliability",
+      "infrastructure",
+      "system engineer",
+      "aws",
+      "kubernetes",
+      "vmware",
+      "nutanix",
+      "proxmox"
+    ],
+    "location": "Bangkok, Thailand",
+    "locations": {
+      "_note": "JobSpy แต่ละแหล่งแก้ where ไม่เหมือนกัน — SEEK/JobsDB ไม่รู้จัก 'Bangkok, Thailand' (log location not found, 0 ผล) แต่ where='Bangkok' ได้ผลจริง (ทดสอบ 21 พ.ย.)",
+      "jobsdb": "Bangkok"
+    },
+    "google_search_term": null,
+    "country_indeed": "thailand",
+    "results_wanted": 100,
+    "hours_old": 72,
+    "linkedin_fetch_description": false
+  },
+  "jobthai": {
+    "keywords": ["developer", "programmer", "IT support", "data", "QA", "devops", "security"],
+    "location": "Bangkok",
+    "resultsLimit": 300
+  },
+  "jobtopgun": {
+    "keywords": ["developer", "programmer", "IT support", "data", "QA", "devops", "security"],
+    "location": "Bangkok",
+    "resultsLimit": 300
+  },
+  "limits": {
+    "_note": "เพดานต่อวันต่อแหล่ง ตาม §5 กติกาการรันต่อแหล่ง",
+    "facebook": { "runs_per_day": 1, "max_groups": 3, "posts_per_group": 150, "days_back": 2 },
+    "linkedin": { "runs_per_keyword_per_day": 1, "results_per_keyword": 100, "on_429": "park_24h" },
+    "indeed": { "runs_per_day": 1, "results": 100, "on_error_2x": "skip_day" },
+    "jobsdb": { "runs_per_day": 1, "results": 100, "on_error_2x": "skip_day" },
+    "google": { "runs_per_day": 1, "results": 100, "on_error_2x": "skip_day" },
+    "jobthai": { "runs_per_day": 2, "results": 300, "on_error_2x": "skip_day" },
+    "jobtopgun": { "runs_per_day": 2, "results": 300, "on_error_2x": "skip_day" }
+  }
+}

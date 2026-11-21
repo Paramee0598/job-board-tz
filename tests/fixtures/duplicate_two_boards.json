@@ -1,0 +1,57 @@
+{
+  "_note": "fixture M6: งานเดียวกัน 2 บอร์ด — title/company ต่างช่องว่างและตัวพิมพ์ แต่ต้องยุบเหลือแถวเดียวและ sources = [linkedin, jobsdb]",
+  "raw": [
+    {
+      "source": "linkedin",
+      "fetched_at": "2026-11-21",
+      "jobs": [
+        {
+          "id": "4000111222",
+          "site": "linkedin",
+          "job_url": "https://www.linkedin.com/jobs/view/4000111222",
+          "title": "Senior  Backend   Developer",
+          "company": "ACME  (Thailand) Co., Ltd.",
+          "location": "วัฒนา, กรุงเทพมหานคร",
+          "district": "วัฒนา",
+          "province": "กรุงเทพมหานคร",
+          "date_posted": "2026-11-20",
+          "job_type": "fulltime",
+          "work_from_home_type": "Hybrid",
+          "job_level": "Mid-Senior level",
+          "salary_text": null,
+          "min_amount": null,
+          "max_amount": null,
+          "currency": "THB",
+          "skills": ["python"],
+          "description": "Senior Backend Developer, 3-5 years, Python, hybrid."
+        }
+      ]
+    },
+    {
+      "source": "jobsdb",
+      "fetched_at": "2026-11-21",
+      "jobs": [
+        {
+          "id": "88877766",
+          "site": "jobsdb",
+          "job_url": "https://th.jobsdb.com/th/job/88877766",
+          "title": "senior backend developer",
+          "company": "acme (thailand) co., ltd.",
+          "location": "วัฒนา, กรุงเทพมหานคร",
+          "district": "วัฒนา",
+          "province": "กรุงเทพมหานคร",
+          "date_posted": "2026-11-20",
+          "job_type": "fulltime",
+          "work_from_home_type": null,
+          "job_level": null,
+          "salary_text": "40,000 - 60,000 บาท",
+          "min_amount": 40000,
+          "max_amount": 60000,
+          "currency": "THB",
+          "skills": [],
+          "description": "Senior Backend Developer. Salary 40,000-60,000 THB. Python required."
+        }
+      ]
+    }
+  ]
+}

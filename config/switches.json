@@ -1,0 +1,71 @@
+{
+  "_note": "สวิตช์ชั้น B (12 ตัว) ตาม brief-jobboard-v3 §4. 'switches' = ค่าที่รันจริง (mirror ของ preset default). เลือก preset อื่นได้ด้วย --preset หรือแก้ 'active'.",
+  "active": "balanced",
+  "switches": {
+    "boards.linkedin": true,
+    "boards.indeed": true,
+    "boards.jobsdb": true,
+    "boards.google": true,
+    "boards.jobthai": true,
+    "boards.jobtopgun": true,
+    "boards.facebook": true,
+    "area.include_perimeter": true,
+    "area.remote_anywhere": false,
+    "time.window_hours": 72,
+    "limit.per_board": 100,
+    "details.fetch_description": false
+  },
+  "presets": {
+    "strict": {
+      "boards.linkedin": true,
+      "boards.indeed": true,
+      "boards.jobsdb": true,
+      "boards.google": false,
+      "boards.jobthai": false,
+      "boards.jobtopgun": false,
+      "boards.facebook": false,
+      "area.include_perimeter": false,
+      "area.remote_anywhere": false,
+      "time.window_hours": 72,
+      "limit.per_board": 50,
+      "details.fetch_description": false
+    },
+    "balanced": {
+      "boards.linkedin": true,
+      "boards.indeed": true,
+      "boards.jobsdb": true,
+      "boards.google": true,
+      "boards.jobthai": true,
+      "boards.jobtopgun": true,
+      "boards.facebook": true,
+      "area.include_perimeter": true,
+      "area.remote_anywhere": false,
+      "time.window_hours": 72,
+      "limit.per_board": 100,
+      "details.fetch_description": false
+    },
+    "wide": {
+      "boards.linkedin": true,
+      "boards.indeed": true,
+      "boards.jobsdb": true,
+      "boards.google": true,
+      "boards.jobthai": true,
+      "boards.jobtopgun": true,
+      "boards.facebook": true,
+      "area.include_perimeter": true,
+      "area.remote_anywhere": true,
+      "time.window_hours": 168,
+      "limit.per_board": 300,
+      "details.fetch_description": true
+    }
+  },
+  "session": {
+    "_note": "§5: ไม่มีคีย์ session.enabled = T0 เสมอ. ห้ามเปิด T1 ก่อน Tz อนุมัติรายครั้ง",
+    "enabled": false,
+    "tier": "T0"
+  },
+  "budget": {
+    "monthly_cap_usd": 4.0,
+    "_note": "wave 2: run_all หยุดเมื่อยอดสะสมเดือนนี้ ≥ cap"
+  }
+}

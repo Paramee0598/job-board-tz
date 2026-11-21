@@ -1,0 +1,57 @@
+{
+  "_note": "fixture cloud-scope: งานเดียวกัน 2 บอร์ด (linkedin + jobsdb) สาย cloud — ต้องยุบเหลือแถวเดียว sources = [linkedin, jobsdb] และผ่าน include ของ scope ใหม่. fixture เดิม duplicate_two_boards.json คงไว้ให้ test_normalize (dedupe/idempotent) ตามเดิม",
+  "raw": [
+    {
+      "source": "linkedin",
+      "fetched_at": "2026-11-21",
+      "jobs": [
+        {
+          "id": "4000222001",
+          "site": "linkedin",
+          "job_url": "https://www.linkedin.com/jobs/view/4000222001",
+          "title": "VMware / Nutanix Administrator",
+          "company": "ACME Cloud (Thailand) Co., Ltd.",
+          "location": "วัฒนา, กรุงเทพมหานคร",
+          "district": "วัฒนา",
+          "province": "กรุงเทพมหานคร",
+          "date_posted": "2026-11-20",
+          "job_type": "fulltime",
+          "work_from_home_type": "Hybrid",
+          "job_level": "Mid-Senior level",
+          "salary_text": null,
+          "min_amount": null,
+          "max_amount": null,
+          "currency": "THB",
+          "skills": ["vmware", "nutanix"],
+          "description": "VMware / Nutanix Administrator, 5+ years, vSphere, hybrid."
+        }
+      ]
+    },
+    {
+      "source": "jobsdb",
+      "fetched_at": "2026-11-21",
+      "jobs": [
+        {
+          "id": "88822233",
+          "site": "jobsdb",
+          "job_url": "https://th.jobsdb.com/th/job/88822233",
+          "title": "vmware / nutanix administrator",
+          "company": "acme cloud (thailand) co., ltd.",
+          "location": "วัฒนา, กรุงเทพมหานคร",
+          "district": "วัฒนา",
+          "province": "กรุงเทพมหานคร",
+          "date_posted": "2026-11-20",
+          "job_type": "fulltime",
+          "work_from_home_type": null,
+          "job_level": null,
+          "salary_text": "50,000 - 70,000 บาท",
+          "min_amount": 50000,
+          "max_amount": 70000,
+          "currency": "THB",
+          "skills": [],
+          "description": "VMware / Nutanix Administrator. Salary 50,000-70,000 THB. vSphere, ESXi required."
+        }
+      ]
+    }
+  ]
+}
