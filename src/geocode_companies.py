@@ -14,6 +14,8 @@
   · คีย์ไม่ออก stdout/stderr และไม่ถูกลงไฟล์: ข้อความ error ทุกก้อนผ่าน redact() ก่อนพิมพ์/เก็บ
   · อ่านคีย์จาก config\\secrets.env เป็นหลัก (ถ้ามี env GOOGLE_MAPS_API_KEY ใช้ env ก่อน — สะดวกตอนทดสอบ)
   · ไม่มีคีย์ → พิมพ์ "no GOOGLE_MAPS_API_KEY in config\\secrets.env" แล้ว exit 2 โดยไม่ยิงเน็ต
+  · คีย์ผิดรูป (ไม่ใช่ AIza + 35 ตัว = 39) → exit 2 ก่อนยิงเน็ต: Google ตอบ 401 แต่ไม่ได้บอกว่า "ผิดชนิดของ
+    credential" คำขอที่เสียไปจึงเปล่าประโยชน์ · ข้อความบอกได้แค่ความยาวกับ 4 ตัวแรก ห้ามพิมพ์คีย์
   · หน่วง >= 0.2 วิ/คำขอ · timeout 15 วิ · error เก็บรายบริษัท ไม่ retry รัว
 
 ใช้
@@ -21,6 +23,7 @@
   python src\\geocode_companies.py --limit 10     # จำกัดจำนวนคำขอรอบนี้
   python src\\geocode_companies.py --refresh      # ยิงใหม่ทุกบริษัท
   python src\\geocode_companies.py --provider geocoding
+  python src\\geocode_companies.py --check-key    # ตรวจรูปคีย์เท่านั้น (ไม่ยิงเน็ต) · exit 0 ถูก / 2 ผิด
 """
 
 from __future__ import annotations
@@ -53,6 +56,8 @@ SECRETS_PATH = CONFIG / "secrets.env"
 OUT_PATH = DATA / "companies.json"
 
 KEY_NAME = "GOOGLE_MAPS_API_KEY"
+KEY_SHAPE_RE = re.compile(r"^AIza[0-9A-Za-z_\-]{35}$")   # รูป API key ของ Google Maps = 39 ตัว
+KEY_EXPECTED = "AIza+35 chars (39)"
 PLACES_URL = "https://places.googleapis.com/v1/places:searchText"
 GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 FIELD_MASK = "places.displayName,places.formattedAddress,places.location,places.addressComponents"
@@ -111,6 +116,36 @@ def find_key() -> tuple[str | None, str | None]:
     if file_key:
         return file_key, "config\\secrets.env"
     return None, None
+
+
+def key_prefix(key: str | None) -> str:
+    """4 ตัวแรกของคีย์ — สั้นกว่านั้นไม่พิมพ์เลย (จะกลายเป็นตัวคีย์เอง)."""
+    key = key or ""
+    return key[:4] if len(key) > 4 else ""
+
+
+def key_shape(key: str | None) -> dict:
+    """รูปคีย์เท่านั้น — ไม่แตะเน็ต และไม่เก็บค่าคีย์ลงผลลัพธ์."""
+    key = key or ""
+    return {
+        "key_shape": "ok" if KEY_SHAPE_RE.match(key) else "wrong",
+        "length": len(key),
+        "prefix": key_prefix(key),
+        "expected": KEY_EXPECTED,
+    }
+
+
+def shape_error_message(key: str) -> str:
+    """คีย์ผิดรูป — บอกความยาว/4 ตัวแรก/รูปที่ต้องการ เท่านั้น (ห้ามพิมพ์คีย์)."""
+    prefix = key_prefix(key)
+    return (
+        f"{KEY_NAME} ผิดรูป: อ่านได้ {len(key)} ตัวอักษร ขึ้นต้นด้วย "
+        f"{(chr(34) + prefix + chr(34)) if prefix else '(สั้นกว่า 4 ตัว)'} "
+        f"แต่ที่ต้องใช้คือ {KEY_EXPECTED} = \"AIza\" ตามด้วย [0-9A-Za-z_-] อีก 35 ตัว\n"
+        "ค่านี้ไม่ใช่ API key ของ Google Maps (token ที่ขึ้นต้น \"AQ.\" เป็น credential ชนิดอื่น) "
+        "→ ไม่ยิงเน็ตเลย ไม่เสียคำขอ และไม่ต้องลอง --provider geocoding\n"
+        f"วาง API key ตัวจริงใน config\\secrets.env บรรทัด {KEY_NAME}=AIza..."
+    )
 
 
 def redact(text: str, key: str | None) -> str:
@@ -473,13 +508,22 @@ def main(argv=None) -> int:
     parser.add_argument("--limit", type=int, default=None, help="จำนวนคำขอสูงสุดในรอบนี้ (ประหยัดโควตา)")
     parser.add_argument("--provider", choices=sorted(PROVIDERS), default="places",
                         help="places (ค่าเริ่มต้น ตามที่ Tz สั่ง) หรือ geocoding (ทางสำรอง)")
+    parser.add_argument("--check-key", action="store_true",
+                        help="ตรวจรูปคีย์แล้วจบ ไม่ยิงเน็ต (exit 0 ถูก / 2 ผิดหรือไม่มีคีย์)")
     args = parser.parse_args(argv)
 
     key, key_source = find_key()
+    if args.check_key:
+        shape = key_shape(key)
+        print(json.dumps(shape, ensure_ascii=False))
+        return 0 if shape["key_shape"] == "ok" else 2
     if not key:
         print(f"no {KEY_NAME} in config\\secrets.env", file=sys.stderr)
         print(f"วางบรรทัด {KEY_NAME}=... ใน config\\secrets.env (ไฟล์นี้อยู่ใน .gitignore) แล้วรันใหม่",
               file=sys.stderr)
+        return 2
+    if not KEY_SHAPE_RE.match(key):
+        print(shape_error_message(key), file=sys.stderr)
         return 2
 
     cfg = load_json(FILTERS_PATH, {}) or {}
