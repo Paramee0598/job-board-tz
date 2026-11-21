@@ -32,6 +32,7 @@ DIST = ROOT / "dist"
 RUNS = ROOT / "runs"
 
 import fetch_jobspy  # noqa: E402  (อยู่ src\ เดียวกัน)
+import fetch_jobthai  # noqa: E402  (jobthai.com ผ่านหน้าเว็บ — ฟรี ไม่ต้องมี token)
 import normalize as norm  # noqa: E402
 
 BUDGET_CAP_USD = 4.0
@@ -42,6 +43,12 @@ PAID_BOARDS = ("jobthai", "jobtopgun", "facebook")
 def load_json(path: Path) -> dict:
     with path.open("r", encoding="utf-8") as fh:
         return json.load(fh)
+
+
+def _cell(value) -> str:
+    """ค่าในช่องตาราง markdown: ตัด CR/LF ที่มาจากหน้าเว็บ/ข้อความ error ไม่ให้ตารางแตก."""
+    text = "-" if value is None or value == "" else str(value)
+    return re.sub(r"[\r\n]+", " ", text).strip() or "-"
 
 
 def switches_for(preset: str | None = None) -> dict:
@@ -114,6 +121,60 @@ def stage_fetch(today: date, sw: dict, keywords=None) -> dict:
         return {"path": None, "per_source": {}, "errors": [], "cost_usd": 0.0,
                 "logs": [], "skipped": "no_board_enabled"}
     return fetch_jobspy.run(keywords=keywords, sites=sites, day=today)
+
+
+def stage_fetch_web(today: date, sw: dict, keywords=None) -> dict:
+    """jobthai.com ผ่านหน้า search (ฟรี ไม่ใช้ Apify) — ขั้นนี้อยู่ก่อน normalize.
+
+    เปิด/ปิดด้วยสวิตช์เดิม boards.jobthai (strict = ปิด).
+    """
+    if not sw.get("boards.jobthai", True):
+        return {"path": None, "per_source": {}, "errors": [], "cost_usd": 0.0,
+                "logs": [], "total_rows": 0, "skipped": "board_disabled"}
+    try:
+        res = fetch_jobthai.run(keywords=keywords, day=today)
+    except Exception as exc:  # เน็ต/ไลบรารีพัง = รายงาน ไม่ทำให้ pipeline ทั้งเส้นตาย
+        return {"path": None, "per_source": {}, "cost_usd": 0.0, "logs": [],
+                "total_rows": 0,
+                "errors": [f"jobthai_web: {type(exc).__name__}: {exc}"]}
+    res["per_source"] = {"jobthai": res.get("total_rows") or 0}
+    return res
+
+
+def merge_fetch(*parts: dict) -> dict:
+    """รวมผลของหลาย fetcher เป็นก้อนเดียวที่ stage_log/summary ใช้."""
+    out = {"path": None, "paths": [], "per_source": {}, "errors": [],
+           "cost_usd": 0.0, "logs": [], "total_rows": 0, "params": None}
+    for part in parts:
+        if not part:
+            continue
+        if part.get("path"):
+            out["paths"].append(part["path"])
+            out["path"] = out["path"] or part["path"]
+        if part.get("params") and out["params"] is None:
+            out["params"] = part["params"]
+        out["per_source"].update(part.get("per_source") or {})
+        out["errors"].extend(part.get("errors") or [])
+        out["cost_usd"] = round(out["cost_usd"] + float(part.get("cost_usd") or 0.0), 4)
+        out["logs"].extend(part.get("logs") or [])
+        out["total_rows"] += int(part.get("total_rows") or 0)
+    return out
+
+
+def load_raw_logs(today: date, name: str) -> dict:
+    """--skip-fetch: อ่าน log ของไฟล์ดิบที่มีอยู่ (ไม่ยิงใหม่). ไม่มีไฟล์ = {}. """
+    path = RAW / today.isoformat() / f"{name}.json"
+    if not path.is_file():
+        return {}
+    try:
+        payload = load_json(path)
+    except (OSError, json.JSONDecodeError):
+        return {}
+    logs = [log for log in (payload.get("logs") or []) if isinstance(log, dict)]
+    return {"path": str(path), "logs": logs, "cost_usd": 0.0, "per_source": {},
+            "errors": [f"{log.get('keyword')}: {log.get('error')}"
+                       for log in logs if log.get("error")],
+            "total_rows": sum(int(log.get("results") or 0) for log in logs)}
 
 
 def stage_normalize(today: date) -> dict:
@@ -195,8 +256,24 @@ def stage_log(today: date, fetch: dict, nres: dict, build: dict, sw: dict,
             f"{' · '.join(errs) if errs else '-'} |"
         )
     for source in PAID_BOARDS:
-        if sw.get(f"boards.{source}"):
+        if sw.get(f"boards.{source}") and not by_source.get(source):
             lines.append(f"| {source} | 0 | 0 | $0.00 | wave 2: ยังไม่มี APIFY_TOKEN → no_token |")
+
+    # jobthai ผ่านเว็บ (ฟรี): คนละทางกับ Apify ข้างบน — แยกตารางให้เห็นทีละคำ/ทีละหน้า
+    web_logs = by_source.get("jobthai", [])
+    lines += ["", "## jobthai (เว็บ, ฟรี ไม่ใช้ Apify)", ""]
+    if web_logs:
+        kws = sorted({str(log.get("keyword")) for log in web_logs if log.get("keyword")})
+        lines += [f"- keywords: {', '.join(kws)}", "",
+                  "| keyword | page | http | results | error |", "|---|---|---|---|---|"]
+        for log in web_logs:
+            lines.append(
+                f"| {_cell(log.get('keyword'))} | "
+                f"{_cell(log.get('page'))} | "
+                f"{_cell(log.get('http'))} | "
+                f"{int(log.get('results') or 0)} | {_cell(log.get('error'))} |")
+    else:
+        lines.append("- ไม่ได้ยิงรอบนี้ (สวิตช์ปิด/--skip-fetch ไม่มีไฟล์ดิบของวันนี้)")
 
     lines += [
         "",
@@ -255,16 +332,19 @@ def main(argv=None) -> int:
         return 0
 
     if "--skip-fetch" in argv:
-        fetch = {"path": None, "per_source": {}, "errors": [], "cost_usd": 0.0,
-                 "logs": load_json(RAW / today.isoformat() / "jobspy.json").get("logs", [])
-                 if (RAW / today.isoformat() / "jobspy.json").is_file() else []}
+        fetch = merge_fetch(load_raw_logs(today, "jobspy"), load_raw_logs(today, "jobthai"))
         notes.append("--skip-fetch: ใช้ผลดิบที่มีอยู่ ไม่ยิงใหม่")
     else:
         keywords = []
         for i, arg in enumerate(argv):
             if arg == "--keywords" and i + 1 < len(argv):
                 keywords.append(argv[i + 1])
-        fetch = stage_fetch(today, sw, keywords or None)
+        # jobthai (เว็บ) ก่อน แล้วค่อย JobSpy — ทั้งคู่อยู่ก่อน normalize และไม่พึ่ง Apify
+        web = stage_fetch_web(today, sw, keywords or None)
+        spy = stage_fetch(today, sw, keywords or None)
+        fetch = merge_fetch(spy, web)
+        fetch["web_path"] = web.get("path")
+        fetch["web_total_rows"] = web.get("total_rows")
 
     nres = stage_normalize(today)
     build = stage_build()

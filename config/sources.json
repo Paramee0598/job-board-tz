@@ -47,6 +47,16 @@
     "location": "Bangkok",
     "resultsLimit": 300
   },
+  "jobthai_web": {
+    "_note": "jobthai เก็บจากหน้า search HTML ตรง ๆ (src\\fetch_jobthai.py) — ฟรี ไม่ใช้ Apify ไม่ต้องมี token. คีย์ jobthai ด้านบนยังเป็นของ Apify (wave 2) ไม่ได้ถูกแทน",
+    "base_url": "https://www.jobthai.com",
+    "search_path": "/th/jobs",
+    "keywords": ["cloud", "vmware", "esxi", "hyper-v", "hypervisor esxi", "virtualization", "virtualisation", "proxmox", "nutanix", "devops"],
+    "pages": 2,
+    "delay_seconds": 1.5,
+    "timeout_seconds": 30,
+    "user_agent": "Mozilla/5.0 (compatible; TzJobBoard/1.0; personal job search)"
+  },
   "limits": {
     "_note": "เพดานต่อวันต่อแหล่ง ตาม §5 กติกาการรันต่อแหล่ง",
     "facebook": { "runs_per_day": 1, "max_groups": 3, "posts_per_group": 150, "days_back": 2 },
