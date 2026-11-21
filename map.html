@@ -3,27 +3,236 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ยังไม่มี GOOGLE_MAPS_API_KEY ใน config\secrets.env</title>
+<title>บริษัทในประกาศงาน — แผนที่กรุงเทพ</title>
 <style>
-:root{--bg:#f7f8fa;--card:#fff;--ink:#1c2128;--muted:#6b7280;--line:#e3e6ea;--warn:#b45309;--accent:#1f6feb}
+:root{--bg:#f7f8fa;--card:#fff;--ink:#1c2128;--muted:#6b7280;--line:#e3e6ea;--accent:#1f6feb;
+ --exact:#1f6feb;--approx:#b45309;--chip:#eef1f5;--warn:#fff7ed;--warnline:#fed7aa;--warnink:#9a3412}
 *{box-sizing:border-box}
-body{margin:0;padding:24px;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.5;
+html,body{margin:0;padding:0;height:100%}
+body{background:var(--bg);color:var(--ink);font-size:14px;line-height:1.45;display:flex;flex-direction:column;
  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Leelawadee UI","Noto Sans Thai",Tahoma,Arial,sans-serif}
-.card{max-width:760px;margin:0 auto;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:20px 22px}
-h1{font-size:18px;margin:0 0 10px}
-p{margin:6px 0;color:var(--muted)}
-code{background:#f1f3f7;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:12.5px;color:var(--ink)}
-.note{margin-top:14px;padding:10px 12px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:8px;font-size:13px}
-.foot{margin-top:16px;font-size:12.5px;color:var(--muted)}
-a{color:var(--accent);display:inline-block;padding:4px 2px;line-height:16px}
+header{background:var(--card);border-bottom:1px solid var(--line);padding:10px 16px 8px;flex:0 0 auto}
+.title-row{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+h1{font-size:18px;margin:0}
+.tag{font-size:12px;color:var(--muted)}
+.meta{margin-left:auto;font-size:12px;color:var(--muted)}
+a{color:var(--accent)}
+.navlink{font-size:13px;text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:3px 8px;background:#fff}
+.navlink:hover{background:#f2f7ff}
+.stats{margin-top:6px;font-size:13px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+.stats b{color:var(--ink);font-weight:600}
+.legend{margin-top:4px;font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;border:2px solid #fff;
+ box-shadow:0 0 0 1px var(--line);margin-right:5px;vertical-align:-1px}
+.dot.exact{background:var(--exact)}
+.dot.approx{background:var(--approx)}
+.warn{margin-top:8px;padding:7px 9px;background:var(--warn);border:1px solid var(--warnline);
+ color:var(--warnink);font-size:12.5px;border-radius:6px}
+.warn code{background:#fff;border:1px solid var(--warnline);border-radius:4px;padding:0 4px}
+main{flex:1 1 auto;display:flex;min-height:0}
+#map{flex:1 1 auto;min-height:320px;background:#e9edf2}
+aside{flex:0 0 320px;border-left:1px solid var(--line);background:var(--card);display:flex;flex-direction:column;min-height:0}
+aside h2{font-size:13px;margin:0;padding:10px 12px;border-bottom:1px solid var(--line);color:var(--ink);
+ display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+aside h2 span{font-size:12px;color:var(--muted);font-weight:400}
+aside .hint{margin:0;padding:8px 12px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line)}
+#offlist{list-style:none;margin:0;padding:0;overflow:auto;flex:1 1 auto}
+#offlist li{display:flex;flex-direction:column;gap:2px;padding:8px 12px;border-bottom:1px solid var(--line)}
+#offlist .co{font-weight:600}
+#offlist .why{font-size:12px;color:var(--warnink)}
+#offlist .nj{font-size:11.5px;color:var(--muted)}
+#offlist .empty{padding:14px 12px;color:var(--muted);font-size:12.5px}
+#maperr{margin:8px 12px;padding:8px 10px;background:var(--warn);border:1px solid var(--warnline);
+ color:var(--warnink);font-size:12.5px;border-radius:6px}
+.pin{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+ color:#fff;font-size:12px;font-weight:600;border:2px solid #fff;cursor:pointer;
+ box-shadow:0 1px 3px rgba(0,0,0,.35)}
+.pin.exact{background:var(--exact)}
+.pin.approx{background:var(--approx)}
+.iw{max-width:320px;font-size:13px;color:var(--ink);font-family:inherit}
+.iw-name{font-weight:700;font-size:14px;margin-bottom:2px}
+.iw-addr{color:var(--muted);font-size:12.5px;margin-bottom:4px}
+.iw-acc{display:inline-block;font-size:11.5px;padding:1px 7px;border-radius:999px;margin-bottom:6px}
+.iw-acc.exact{background:#dbeafe;color:#1e40af}
+.iw-acc.approx{background:#fef3c7;color:#92400e}
+.iw-jobs{list-style:none;margin:0;padding:0}
+.iw-jobs li{display:flex;gap:8px;justify-content:space-between;align-items:baseline;
+ padding:3px 0;border-top:1px solid #eef1f5}
+.iw-jobs a{color:var(--accent);text-decoration:none}
+.iw-jobs a:hover{text-decoration:underline}
+.iw-score{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums;flex:0 0 auto}
+.iw-empty{color:var(--muted);font-size:12px}
+footer{flex:0 0 auto;border-top:1px solid var(--line);background:var(--card);padding:6px 16px;
+ font-size:12px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+footer a{display:inline-block;padding:4px 2px;line-height:16px}
+@media (max-width: 760px){
+  main{flex-direction:column}
+  #map{min-height:52vh}
+  aside{flex:1 1 auto;border-left:0;border-top:1px solid var(--line);max-height:40vh}
+}
 </style>
 </head>
 <body>
-<div class="card">
-  <h1>ยังไม่มี GOOGLE_MAPS_API_KEY ใน config\secrets.env</h1>
-  <p>วางคีย์แล้วรัน <code>python src\geocode_companies.py && python src\build_map.py</code> — ไฟล์ config\secrets.env อยู่ใน .gitignore ไม่ขึ้น repo</p>
-  <div class="note">สาเหตุที่หน้านี้ยังไม่แสดงแผนที่: ไม่มีคีย์ · หน้านี้ไม่เรียก Google เลย</div>
-  <p class="foot">สร้างเมื่อ 2026-11-21T16:03:29 · <a href="index.html">← กลับหน้า dashboard</a></p>
-</div>
+<header>
+  <div class="title-row">
+    <h1>บริษัทในประกาศงาน — แผนที่กรุงเทพ</h1>
+    <span class="tag">Google Maps · หมุดจาก Google Places</span>
+    <span class="meta"><a class="navlink" href="index.html">← กลับหน้า dashboard</a></span>
+  </div>
+  <div class="stats">
+    <span>บริษัททั้งหมด <b>47</b></span>
+    <span>บนแผนที่ <b>41</b></span>
+    <span>ไม่พบบนแผนที่ <b>6</b></span>
+    <span>งานในบริษัทเหล่านี้ <b>61</b></span>
+  </div>
+  <div class="legend">
+    <span><span class="dot exact"></span>ตรงชื่อบริษัท + อยู่กรุงเทพ (18)</span>
+    <span><span class="dot approx"></span>ประมาณ — ชื่อไม่ตรงเป๊ะ (25)</span>
+    <span>เฉพาะบริษัทที่อยู่ในกรุงเทพเท่านั้น · ไม่มีวงรัศมีพื้นที่</span>
+  </div>
+  
+</header>
+<main>
+  <div id="map"></div>
+  <aside>
+    <h2>ไม่ปรากฏบนแผนที่ <span>6 บริษัท</span></h2>
+    <p class="hint">หมุดขึ้นเฉพาะบริษัทที่ Google ยืนยันว่าอยู่ในกรุงเทพ — ที่เหลือแสดงที่นี่พร้อมเหตุผล</p>
+    <div id="maperr" hidden></div>
+    <ul id="offlist"><li><span class="co">Coherent Corp.</span><span class="why">ไม่พบที่อยู่จาก Google</span><span class="nj">1 งาน</span></li><li><span class="co">GoTymeX</span><span class="why">ไม่พบที่อยู่จาก Google</span><span class="nj">1 งาน</span></li><li><span class="co">Lannacom</span><span class="why">อยู่นอกกรุงเทพ · เชียงใหม่</span><span class="nj">1 งาน</span></li><li><span class="co">Microsoft</span><span class="why">อยู่นอกกรุงเทพ · ชลบุรี</span><span class="nj">1 งาน</span></li><li><span class="co">SupportYourApp</span><span class="why">ไม่พบที่อยู่จาก Google</span><span class="nj">1 งาน</span></li><li><span class="co">Twentoo</span><span class="why">ไม่พบที่อยู่จาก Google</span><span class="nj">1 งาน</span></li></ul>
+  </aside>
+</main>
+<footer>
+  <span>พิกัดจาก data\companies.json (สร้าง 2026-11-21T16:58:42)</span>
+  <span>หน้าเว็บสร้าง 2026-11-21T16:58:50</span>
+  <span><a href="index.html">dashboard</a></span>
+</footer>
+<script>
+window.MAPDATA = {"center":{"lat":13.7563,"lng":100.5018},"zoom":11,"map_id":"DEMO_MAP_ID","companies":[{"company":"Advanced Info Service","lat":13.7835121,"lng":100.5465694,"formatted_address":"414 ถ. พหลโยธิน แขวงสามเสนใน เขตพญาไท กรุงเทพมหานคร 10400","province":"กรุงเทพมหานคร","accuracy":"approx","status":"ok","found_name":"บริษัท แอดวานซ์ อินโฟร์ เซอร์วิส จำกัด (มหาชน), เอไอเอส","jobs":[{"title":"Cloud Product Architect, Product Development, GTM Partner (Cloud Business)","score":12,"url":"https://th.jobsdb.com/job/95983175","posted_at":"2026-11-19"},{"title":"IT Infrastructure Engineer","score":7,"url":"https://th.jobsdb.com/job/95989482","posted_at":"2026-11-19"}]},{"company":"Agoda","lat":13.7279788,"lng":100.5479965,"formatted_address":"PGHX+55X ถ. วิทยุ แขวงลุมพินี เขตปทุมวัน กรุงเทพมหานคร 10330","province":"กรุงเทพมหานคร","accuracy":"exact","status":"ok","found_name":"Agoda Office Headquarters","jobs":[{"title":"Engineering Manager, Developer Platform & DevOps (Bangkok based, relocation provided)","score":12,"url":"https://www.linkedin.com/jobs/view/4491872490","posted_at":"2026-11-18"},{"title":"Senior Network Operation Engineer (Bangkok based)","score":11,"url":"https://th.jobsdb.com/job/95975096","posted_at":"2026-11-18"},{"title":"Software Developer - Infrastructure Platform (Bangkok-based, 10-month Contract)","score":7,"url":"https://th.jobsdb.com/job/95974951","posted_at":"2026-11-18"}]},{"company":"Amaris Consulting","lat":13.7222102,"lng":100.5806028,"formatted_address":"15-17, 20, 25-27Fl, T-One Building, 8 ซ. สุขุมวิท 40 แขวงพระโขนง เขตคลองเตย กรุงเทพมหานคร 10110","province":"กรุงเทพมหานคร","accuracy":"exact","status":"ok","found_name":"Amaris Consulting | Part of Mantu - Bangkok","jobs":[{"title":"Secure GenAI Platform Engineer","score":67,"url":"https://th.indeed.com/viewjob?jk=875c7851cd3bf549","posted_at":"2026-11-18"},{"title":"Enterprise AI Security Architect","score":35,"url":"https://th.indeed.com/viewjob?jk=3fcfc38b18f4b563","posted_at":"2026-11-18"},{"title":"Full Stack Developer (Insurance)","score":25,"url":"https://th.indeed.com/viewjob?jk=16ed1536931eb461","posted_at":"2026-11-19"}]},{"company":"Amazon Web Services","lat":13.7479455,"lng":100.5645447,"formatted_address":"1788 Singha Complex, 16th floor แขวงบางกะปิ เขตห้วยขวาง กรุงเทพมหานคร 10310","province":"กรุงเทพมหานคร","accuracy":"approx","status":"ok","found_name":"AWS - Amazon Web Services (Thailand)","jobs":[{"title":"Data Center Facility Manager, AWS Infrastructure Operations","score":15,"url":"https://th.jobsdb.com/job/95973471","posted_at":"2026-11-18"},{"title":"Controls Technician - BKK, APAC Controls Deployment & Service","score":12,"url":"https://th.jobsdb.com/job/96025975","posted_at":"2026-11-20"}]},{"company":"Amazon Web Services (AWS)","lat":13.7479455,"lng":100.5645447,"formatted_address":"1788 Singha Complex, 16th floor แขวงบางกะปิ เขตห้วยขวาง กรุงเทพมหานคร 10310","province":"กรุงเทพมหานคร","accuracy":"approx","status":"ok","found_name":"AWS - Amazon Web Services (Thailand)","jobs":[{"title":"Controls Technician - BKK, APAC Controls Deployment & Service","score":12,"url":"https://www.linkedin.com/jobs/view/4492907964","posted_at":"2026-11-20"}]},{"company":"Amazon.com","lat":13.7419055,"lng":100.5067538,"formatted_address":"115 อาคาร สำเพ็งสแควร์ 115 ถ. ราชวงศ์ แขวงจักรวรรดิ์ เขตสัมพันธวงศ์ กรุงเทพมหานคร 10100","province":"กรุงเทพมหานคร","accuracy":"approx","status":"ok","found_name":"อเมซอน สาขาสำเพ็งสแควร์","jobs":[{"title":"Controls Technician - BKK, APAC Controls Deployment & Service","score":34,"url":"https://th.indeed.com/viewjob?jk=bb4d9f86aeeb6bd3","posted_at":"2026-11-20"},{"title":"Data Center Facility Manager, AWS Infrastructure Operations","score":18,"url":"https://th.indeed.com/viewjob?jk=5cceb4959cec0a11","posted_at":"2026-11-18"}]},{"company":"Arise by INFINITAS","lat":13.7212551,"lng":100.5583281,"formatted_address":"อาคารเดอะ ปาร์ค ชั้น 5 9-10 ถ. รัชดาภิเษก แขวงคลองเตย เขตคลองเตย กรุงเทพมหานคร 10110","province":"กรุงเทพมหานคร","accuracy":"exact","status":"ok","found_name":"Arise By INFINITAS","jobs":[{"title":"Cloud Network Engineer","score":15,"url":"https://www.linkedin.com/jobs/view/4492566091","posted_at":"2026-11-20"}]},{"company":"CBRE","lat":13.7419696,"lng":100.5462426,"formatted_address":"548 One City Centre, Floor 46th and 45th Unit 01, 02 ถนน เพลินจิต แขวงลุมพินี เขตปทุมวัน กรุงเทพมหานคร 10330","province":"กรุงเทพมหานคร","accuracy":"exact","status":"ok","found_name":"CBRE Thailand","jobs":[{"title":"IT Data Center Technician (Bangna)","score":4,"url":"https://th.jobsdb.com/job/96023595","posted_at":"2026-11-20"}]},{"company":"Coda","lat":13.7359882,"lng":100.5460214,"formatted_address":"130-132 ถ. วิทยุ แขวงลุมพินี เขตปทุมวัน กรุงเทพมหานคร 10330","province":"กรุงเทพมหานคร","accuracy":"approx","status":"ok","found_name":"โคด้า","jobs":[{"title":"Senior Infrastructure Operations Engineer","score":11,"url":"https://www.linkedin.com/jobs/view/4492259518","posted_at":"2026-11-19"}]},{"company":"Coda Payments","lat":13.7141057,"lng":100.5921372,"formatted_address":"3rd Floor, Summer Hub, 1778 ถ. สุขุมวิท Prakanong, เขตคลองเตย กรุงเทพมหานคร 10110","province":"กรุงเทพมหานคร","accuracy":"approx","status":"ok","found_name":"Coda Thailand - Game and App Monetization Experts","jobs":[{"title":"Senior Infrastructure Operations Engineer","score":11,"url":"https://th.jobsdb.com/job/95985912","posted_at":"2026-11-19"}]},{"company":"Comarch","lat":13.7481672,"lng":100.5645206,"formatted_address":"1788 Singha Complex Building, Unit No.1901, 19th floor, ถนน เพชรบุรีตัดใหม่ Bangkapi, เขตห้วยขวาง กรุงเทพมหานคร 10310","province":"กรุงเทพมหานคร","accuracy":"exact","status":"ok","found_name":"Comarch (Thailand) Limited","jobs":[{"title":"System Engineer - DevOps","score":12,"url":"https://www.linkedin.com/jobs/view/4484457666","posted_at":"2026-11-19"}]},{"company":"CP Axtra","lat":13.7364186,"lng":100.6272164,"formatted_address":"1468 ถ. พัฒนาการ แขวงสวนหลวง เขตสวนหลวง กรุงเทพมหานคร 10250","province":"กรุงเทพมหานคร","accuracy":"approx","status":"ok","found_name":"บริษัท ซีพี แอ็กซ์ตร้า จำกัด (มหาชน) สำนักงานใหญ่","jobs":[{"title":"Senior System Engineer - Infrastructure Platform","score":11,"url":"https://th.jobsdb.com/job/95977088","posted_at":"2026-11-18"}]},{"company":"Finema Co., Ltd","lat":13.7212043,"lng":100.567734,"formatted_address":"104/2 warehouse, 26 สุขุมวิท 26 แขวงคลองตัน เขตคลองเตย กรุงเทพมหานคร 10110","province":"กรุงเทพมหานคร","accuracy":"exact","status":"ok","found_name":"Finema HQ","jobs":[{"title":"Cloud Solution Engineer (Cloud & DevSecOps)","score":12,"url":"https://th.jobsdb.com/job/95975646","posted_at":"2026-11-18"}]},{"company":"HCO Strategy","lat":13.7301912,"lng":100.5857993,"formatted_address":"87, Building 12th Floor, MODERN TOWN 106 ซ. สุขุมวิท 63 North Khlongton, เขตวัฒนา กรุงเทพมหานคร 10110","province":"กรุงเทพมหานคร","accuracy":"approx","status":"ok","found_name":"H&G (Thailand) Co., Ltd.","jobs":[{"title":"ERP System Administrator","score":4,"url":"https://www.linkedin.com/jobs/view/4492149055","posted_at":"2026-11-19"}]},{"company":"Hewlett Packard Enterprise | HPE","lat":13.7272222,"lng":100.5405892,"formatted_address":"2nd and 16th floor, 968 ถ. พระรามที่ 4 แขวงสีลม เขตบางรัก กรุงเทพมหานคร 10500","province":"กรุงเทพมหานคร","accuracy":"exact","status":"ok","found_name":"Hewlett Packard Enterprise (HPE)","jobs":[{"title":"Digital Customer Success Manager","score":15,"url":"https://th.indeed.com/viewjob?jk=57ced8dc8075ac97","posted_at":"2026-11-18"}]},{"company":"iCE Consulting","lat":13.7582643,"lng":100.5355381,"formatted_address":"475 ถ. พญาไท แขวงถนนพญาไท เขตราชเทวี กรุงเทพมหานคร 10400","province":"กรุงเทพมหานคร","accuracy":"exact","status":"ok","found_name":"iCE Consulting Co.,Ltd.","jobs":[{"title":"Cloud Engineer / Database Administrator (DBA)","score":12,"url":"https://th.jobsdb.com/job/96022022","posted_at":"2026-11-20"}]},{"company":"Lansing Business Systems","lat":13.8210889,"lng":100.6135204,"formatted_address":"2 ซอย นาคนิวาส 48 แยก 13 แขวงลาดพร้าว ลาดพร้าว กรุงเทพมหานคร 10230","province":"กรุงเทพมหานคร","accuracy":"exact","status":"ok","found_name":"Lansing Business Systems Co, Ltd.","jobs":[{"title":"Senior Cloud Engineer (Public cloud , Azure, AWS) >> Urgently","score":29,"url":"https://th.jobsdb.com/job/95974575","posted_at":"2026-11-18"}]},{"company":"Life at Smile Education","lat":13.7359225,"lng":100.5243402,"formatted_address":"เลขที่ 926 โครงการ Block 28 อาคาร C ชั้น 3 ห้อง C305 - C312 ซอย แขวงวังใหม่ เขตปทุมวัน กรุงเทพมหานคร 10330","province":"กรุงเทพมหานคร","accuracy":"approx","status":"ok","found_name":"SmartMathPro Office","jobs":[{"title":"Senior IT Infrastructure & Systems (SmartMathPro)","score":11,"url":"https://www.linkedin.com/jobs/view/4491380671","posted_at":"2026-11-19"}]},{"company":"Makro PRO","lat":13.7619662,"lng":100.4700971,"formatted_address":"521 521/27 ถ. จรัญสนิทวงศ์ แขวงบางขุนศรี เขตบางกอกน้อย กรุงเทพมหานคร 10700","province":"กรุงเทพมหานคร","accuracy":"approx","status":"ok","found_name":"แม็คโคร จรัญสนิทวงศ์","jobs":[{"title":"Senior System Engineer - Infrastructure Platform","score":11,"url":"https://www.linkedin.com/jobs/view/4491807628","posted_at":"2026-11-18"}]},{"company":"Maltem Asia-Pacific","lat":13.8012025,"lng":100.6004852,"formatted_address":"241 ซอย สังคม 1 แขวงลาดพร้าว ลาดพร้าว กรุงเทพมหานคร 10230","province":"กรุงเทพมหานคร","accuracy":"approx","status":"ok","found_name":"บริษัท มอลเทค (ประเทศไทย) จำกัด","jobs":[{"title":"Observability Engineer (AWS / Splunk / ELK / OpenTelemetry)","score":12,"url":"https://www.linkedin.com/jobs/view/4492144550","posted_at":"2026-11-19"}]},{"company":"NES Fircroft","lat":13.7369608,"lng":100.5620488,"formatted_address":"Interchange 21, 399 ถ. สุขุมวิท แขวงคลองเตยเหนือ เขตวัฒนา กรุงเทพมหานคร 10110","province":"กรุงเทพมหานคร","accuracy":"exact","status":"ok","found_name":"NES Fircroft","jobs":[{"title":"Mechanical Engineer – Data Center Solutions","score":4,"url":"https://th.jobsdb.com/job/96024713","posted_at":"2026-11-20"},{"title":"Project Manager – Data Center","score":4,"url":"https://th.jobsdb.com/job/96024393","posted_at":"2026-11-20"}]},{"company":"Nipa Technology","lat":13.726744,"lng":100.5141554,"formatted_address":"บริษัท นิภา เทคโนโลยี จำกัด (สำนักงานใหญ่ 72 อาคารโทรคมนาคม บางรัก ชั้น 4 ห้อง 401-402 ถ. เจริญกรุง บางรัก เขตบางรัก กรุงเทพมหานคร 10500","province":"กรุงเทพมหานคร","accuracy":"exact","status":"ok","found_name":"NIPA Technology","jobs":[{"title":"Network Operations Center","score":7,"url":"https://th.jobsdb.com/job/95989896","posted_at":"2026-11-19"}]},{"company":"NTT DATA","lat":13.7263839,"lng":100.5473755,"formatted_address":"21st Floor, One Bangkok Tower3, แขวงลุมพินี เขตปทุมวัน กรุงเทพมหานคร 10330","province":"กรุงเทพมหานคร","accuracy":"exact","status":"ok","found_name":"NTT DATA (Thailand) Company Limited (Head Office)","jobs":[{"title":"Cloud Architect Lead","score":14,"url":"https://th.jobsdb.com/job/96014222","posted_at":"2026-11-18"},{"title":"Data Centre Service Delivery Field Support Engineer (L1)-7","score":4,"url":"https://th.jobsdb.com/job/96014510","posted_at":"2026-11-18"}]},{"company":"NTT DATA North America","lat":13.7263265,"lng":100.547253,"formatted_address":"อาคาร วัน แบงค็อก ทาวเวอร์ 3 ห้องเลขที่ 2006 - 2007 ชั้นที่ 20, เลขที่ 1875 ถ. พระรามที่ 4 แขวงลุมพินี เขตปทุมวัน กรุงเทพมหานคร 10330","province":"กรุงเทพมหานคร","accuracy":"approx","status":"ok","found_name":"NTT DATA Business Solutions (Thailand) Ltd.","jobs":[{"title":"Cloud Operations Engineer (Azure)","score":17,"url":"https://www.linkedin.com/jobs/view/4411624449","posted_at":"2026-11-18"}]},{"company":"NTT DATA, Inc.","lat":13.7263839,"lng":100.5473755,"formatted_address":"21st Floor, One Bangkok Tower3, แขวงลุมพินี เขตปทุมวัน กรุงเทพมหานคร 10330","province":"กรุงเทพมหานคร","accuracy":"exact","status":"ok","found_name":"NTT DATA (Thailand) Company Limited (Head Office)","jobs":[{"title":"Senior Associate Cloud Technical Architect","score":16,"url":"https://www.linkedin.com/jobs/view/4409288218","posted_at":"2026-11-20"},{"title":"Senior Associate Data Centre Technical Architect","score":8,"url":"https://www.linkedin.com/jobs/view/4409279482","posted_at":"2026-11-18"}]},{"company":"Oracle","lat":13.729539,"lng":100.535169,"formatted_address":"16 Floor Ramaland Building, Rama 4 road, Suriyawong, Bangrak, Bangkok 10500","province":"Bangkok","accuracy":"approx","status":"ok","found_name":"ออราเคิล (ประเทศไทย)","jobs":[{"title":"Principal Data Center Operator","score":6,"url":"https://www.linkedin.com/jobs/view/4476710152","posted_at":"2026-11-20"}]},{"company":"Pacifica Elements","lat":13.7468107,"lng":100.5738271,"formatted_address":"2032, Ital-Thai Tower ถนน แขวงบางกะปิ เขตห้วยขวาง กรุงเทพมหานคร 10310","province":"กรุงเทพมหานคร","accuracy":"approx","status":"ok","found_name":"Pacifica Group","jobs":[{"title":"System Administrator","score":4,"url":"https://th.jobsdb.com/job/95993271","posted_at":"2026-11-19"}]},{"company":"Professional One","lat":13.7808994,"lng":100.5458207,"formatted_address":"388 ถ. พหลโยธิน แขวงสามเสนใน เขตพญาไท กรุงเทพมหานคร 10400","province":"กรุงเทพมหานคร","accuracy":"approx","status":"ok","found_name":"บริษัท โปรเฟสชันแนลวัน จำกัด","jobs":[{"title":"DevOps Engineer (พระราม 3)","score":12,"url":"https://th.jobsdb.com/job/96030073","posted_at":"2026-11-20"}]},{"company":"PRTR Recruitment","lat":13.7465486,"lng":100.5737431,"formatted_address":"2034/82 อาคาร, อิตัลไทย ทาวเวอร์ ชั้นที่ 18 ถ. เพชรบุรีตัดใหม่ แขวงบางกะปิ เขตห้วยขวาง กรุงเทพมหานคร 10310","province":"กรุงเทพมหานคร","accuracy":"approx","status":"ok","found_name":"PRTR Group Public Company Limited","jobs":[{"title":"Tech Operations Lead (DevOps+SD)","score":14,"url":"https://th.jobsdb.com/job/95973337","posted_at":"2026-11-18"}]},{"company":"Siam Bheasach","lat":13.7985176,"lng":100.5663244,"formatted_address":"123 ซอย โชคชัยร่วมมิตร แขวงจอมพล จตุจักร กรุงเทพมหานคร 10900","province":"กรุงเทพมหานคร","accuracy":"exact","status":"ok","found_name":"Siam Bheasach Co., Ltd.","jobs":[{"title":"Systems Engineer (Infrastructure)","score":7,"url":"https://th.jobsdb.com/job/95989874","posted_at":"2026-11-19"}]},{"company":"Siemens","lat":13.6863068,"lng":100.6105851,"formatted_address":"111 True Digital Park West, Unicorn Building 6th Floor, Unit 601 Bangchak 602 ถ. สุขุมวิท แขวงบางจาก เขตพระโขนง กรุงเทพมหานคร 10260","province":"กรุงเทพมหานคร","accuracy":"exact","status":"ok","found_name":"Siemens Limited","jobs":[{"title":"Station Information and Surveillance Systems Engineer","score":14,"url":"https://th.indeed.com/viewjob?jk=a419387d87ccbb5a","posted_at":"2026-11-18"}]},{"company":"SS&C","lat":13.7333335,"lng":100.5663267,"formatted_address":"571 ถ. สุขุมวิท แขวงคลองตันเหนือ เขตวัฒนา กรุงเทพมหานคร 10110","province":"กรุงเทพมหานคร","accuracy":"approx","status":"ok","found_name":"เอสเอสแอนด์ซี เทคโนโลยี (ประเทศไทย)","jobs":[{"title":"Sr. DevOps Engineer","score":79,"url":"https://th.indeed.com/viewjob?jk=c6b7d147e978e605","posted_at":"2026-11-18"},{"title":"Lead Data Engineer","score":49,"url":"https://th.indeed.com/viewjob?jk=0d20746f273bb7ea","posted_at":"2026-11-18"},{"title":"Senior Data Engineer","score":49,"url":"https://th.indeed.com/viewjob?jk=e5c6dd200cd098d1","posted_at":"2026-11-18"},{"title":"DevOps Engineer","score":47,"url":"https://th.indeed.com/viewjob?jk=9c1d7a01fbbba121","posted_at":"2026-11-18"}]},{"company":"Sumitomo Mitsui Trust Bank","lat":13.7258992,"lng":100.5482433,"formatted_address":"1879 ถ. พระรามที่ 4 แขวงลุมพินี เขตปทุมวัน กรุงเทพมหานคร 10330","province":"กรุงเทพมหานคร","accuracy":"approx","status":"ok","found_name":"三井住友銀行バンコク支店","jobs":[{"title":"IT Network Engineer (Senior Level)","score":11,"url":"https://th.jobsdb.com/job/96000194","posted_at":"2026-11-19"}]},{"company":"Summit Capital","lat":13.72698,"lng":100.5407743,"formatted_address":"968 ชั้น 11 ถ. พระรามที่ 4 แขวงสีลม เขตบางรัก กรุงเทพมหานคร 10500","province":"กรุงเทพมหานคร","accuracy":"approx","status":"ok","found_name":"บริษัท ซัมมิท แคปปิตอล ลีสซิ่ง จำกัด สำนักงานใหญ่","jobs":[{"title":"IT Infrastructure Engineer  [System Administrator - AVP]","score":7,"url":"https://th.jobsdb.com/job/96013454","posted_at":"2026-11-20"}]},{"company":"Systems Dot Com","lat":13.6615051,"lng":100.6409151,"formatted_address":"88 ซอย บางนา-ตราด 48 แขวงบางนาใต้ เขตบางนา กรุงเทพมหานคร 10260","province":"กรุงเทพมหานคร","accuracy":"approx","status":"ok","found_name":"ซิสเต็มส์ ดอท คอม","jobs":[{"title":"Systems Engineer Manager","score":4,"url":"https://th.jobsdb.com/job/95985094","posted_at":"2026-11-19"}]},{"company":"Toptier IT Manpower Co., Ltd.","lat":13.7810607,"lng":100.5453478,"formatted_address":"388 อาคารเอส.พี. ชั้น 3, ถ. พหลโยธิน แขวงพญาไท เขตพญาไท กรุงเทพมหานคร 10400","province":"กรุงเทพมหานคร","accuracy":"exact","status":"ok","found_name":"Toptier IT Manpower Co., Ltd.","jobs":[{"title":"Automate Tester 40-50K Per month ออนไซต์ 100%","score":15,"url":"https://th.indeed.com/viewjob?jk=5f8b967ae0f71167","posted_at":"2026-11-19"}]},{"company":"Trend Micro Inc.","lat":13.7458595,"lng":100.5381269,"formatted_address":"4410-4442 the Offices At Central World ชั้น L44 ถ. พระรามที่ 1 แขวงปทุมวัน เขตปทุมวัน กรุงเทพมหานคร 10330","province":"กรุงเทพมหานคร","accuracy":"exact","status":"ok","found_name":"Trend Micro Thailand","jobs":[{"title":"Strategic Account Manager","score":26,"url":"https://th.indeed.com/viewjob?jk=2fc27e5907ef4477","posted_at":"2026-11-20"}]},{"company":"TÜV Nord","lat":13.6636512,"lng":100.6513449,"formatted_address":"อาคารอินเตอร์ลิงค์ 1858/103-104 ชั้น 23 ⋅, ถ. เทพรัตน แขวงบางนาใต้ Sub-District, กรุงเทพมหานคร 10260","province":"กรุงเทพมหานคร","accuracy":"approx","status":"ok","found_name":"TUV NORD(Thailand)Co.,Ltd","jobs":[{"title":"Data Center Auditor","score":4,"url":"https://th.jobsdb.com/job/96011107","posted_at":"2026-11-20"}]},{"company":"Vertis Digital","lat":13.7031025,"lng":100.544074,"formatted_address":"11/8 ถนน รัชดาภิเษก แขวงช่องนนทรี เขตยานนาวา กรุงเทพมหานคร 10120","province":"กรุงเทพมหานคร","accuracy":"approx","status":"ok","found_name":"Verismart Technologies Co.,Ltd.","jobs":[{"title":"Full Stack Developer","score":35,"url":"https://th.indeed.com/viewjob?jk=d8302c29811c61ef","posted_at":"2026-11-18"}]},{"company":"Warrix Sport","lat":13.7459463,"lng":100.5244813,"formatted_address":"สเตเดี้ยมวัน 849 พระราม 6 ซอย 8 แขวงวังใหม่ เขตปทุมวัน กรุงเทพมหานคร 10330","province":"กรุงเทพมหานคร","accuracy":"approx","status":"ok","found_name":"Warrix Shop Stadium One","jobs":[{"title":"Senior Software Engineer (Full Stack & DevOps)","score":16,"url":"https://th.jobsdb.com/job/96024763","posted_at":"2026-11-20"}]},{"company":"ธนาคารแห่งประเทศไทย","lat":13.7690145,"lng":100.5005789,"formatted_address":"273 ถ. สามเสน แขวงวัดสามพระยา เขตพระนคร กรุงเทพมหานคร 10200","province":"กรุงเทพมหานคร","accuracy":"exact","status":"ok","found_name":"ธนาคารแห่งประเทศไทย","jobs":[{"title":"ผู้ตรวจสอบอาวุโส ฝ่ายกำกับและตรวจสอบความเสี่ยงด้านเทคโนโลยีสารสนเทศ","score":17,"url":"https://th.indeed.com/viewjob?jk=057b573bec6d8553","posted_at":"2026-11-19"},{"title":"ผู้ตรวจสอบ/ผู้ตรวจสอบอาวุโส ฝ่ายกำกับและตรวจสอบความเสี่ยงด้านเทคโนโลยีสารสนเทศ","score":15,"url":"https://th.indeed.com/viewjob?jk=786a2e0b70231d25","posted_at":"2026-11-19"}]}],"off_map":[{"company":"Coherent Corp.","lat":null,"lng":null,"formatted_address":"","province":"","accuracy":"unknown","status":"not_found","found_name":"","jobs":[{"title":"IT Infrastructure and User Support","score":7,"url":"https://www.linkedin.com/jobs/view/4484432876","posted_at":"2026-11-18"}],"reason":"ไม่พบที่อยู่จาก Google"},{"company":"GoTymeX","lat":null,"lng":null,"formatted_address":"","province":"","accuracy":"unknown","status":"not_found","found_name":"","jobs":[{"title":"Senior AI/ML Engineer (Open to SEA & India Candidates)","score":63,"url":"https://th.indeed.com/viewjob?jk=c5e313e195fb56b6","posted_at":"2026-11-21"}],"reason":"ไม่พบที่อยู่จาก Google"},{"company":"Lannacom","lat":18.7033728,"lng":98.9091265,"formatted_address":"125 หมู่ที่ 6 หางดง อำเภอหางดง เชียงใหม่ 50230","province":"เชียงใหม่","accuracy":"approx","status":"ok","found_name":"บริษัท ลานนาคอม จำกัด","jobs":[{"title":"Solutions Engineer – Software, Cloud, and AI","score":12,"url":"https://th.jobsdb.com/job/96025568","posted_at":"2026-11-20"}],"reason":"อยู่นอกกรุงเทพ · เชียงใหม่"},{"company":"Microsoft","lat":13.3428387,"lng":100.9626995,"formatted_address":"112, 27-28 หมู่ 1 ตำบล เสม็ด อำเภอเมืองชลบุรี ชลบุรี 20000","province":"ชลบุรี","accuracy":"approx","status":"ok","found_name":"Siam Microsoft Tech Co., Ltd.","jobs":[{"title":"Data Center Technician Manager","score":4,"url":"https://www.linkedin.com/jobs/view/4477159815","posted_at":"2026-11-20"}],"reason":"อยู่นอกกรุงเทพ · ชลบุรี"},{"company":"SupportYourApp","lat":null,"lng":null,"formatted_address":"","province":"","accuracy":"unknown","status":"not_found","found_name":"","jobs":[{"title":"(English C1) Technical Support Consultant, VPS & Trading (Remote)","score":17,"url":"https://th.indeed.com/viewjob?jk=af2240af37a891d6","posted_at":"2026-11-19"}],"reason":"ไม่พบที่อยู่จาก Google"},{"company":"Twentoo","lat":null,"lng":null,"formatted_address":"","province":"","accuracy":"unknown","status":"not_found","found_name":"","jobs":[{"title":"Thai-speaking IT Infrastructure Engineer | Bangkok, Hybrid","score":50,"url":"https://th.indeed.com/viewjob?jk=bdd3ac22e797501c","posted_at":"2026-11-18"}],"reason":"ไม่พบที่อยู่จาก Google"}],"counts":{"total":47,"on_map":41,"off_map":6,"jobs_total":61,"accuracy":{"exact":18,"approx":25,"unknown":4}}};
+(function () {
+  'use strict';
+  var DATA = window.MAPDATA || { companies: [], counts: {} };
+  var EXACT_COLOR = '#1f6feb';
+  var APPROX_COLOR = '#b45309';
+  var READY = false;
+
+  function notice(message) {
+    var box = document.getElementById('maperr');
+    if (!box) return;
+    box.textContent = message;
+    box.hidden = false;
+  }
+
+  /* Google เรียกตัวนี้เมื่อคีย์ถูกปฏิเสธ — หน้าเว็บยังอ่านแผงรายชื่อได้ */
+  window.gm_authFailure = function () {
+    notice('Google ปฏิเสธคีย์ (auth failure) — ตรวจ GOOGLE_MAPS_API_KEY และการเปิด Maps JavaScript API');
+  };
+
+  function el(tag, cls, text) {
+    var node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined && text !== null) node.textContent = String(text);
+    return node;
+  }
+
+  function safeUrl(value) {
+    return /^https?:\/\//i.test(String(value || '')) ? String(value) : '';
+  }
+
+  function infoNode(company) {
+    var box = el('div', 'iw');
+    box.appendChild(el('div', 'iw-name', company.company));
+    box.appendChild(el('div', 'iw-addr', company.formatted_address || 'ไม่มีที่อยู่จาก Google'));
+    var exact = company.accuracy === 'exact';
+    box.appendChild(el('div', 'iw-acc ' + (exact ? 'exact' : 'approx'),
+      exact ? 'ที่อยู่จาก Google · ตรงชื่อบริษัท' : 'ประมาณ · ชื่อที่ Google คืนไม่ตรงกับชื่อบริษัท'));
+    var jobs = company.jobs || [];
+    var list = el('ul', 'iw-jobs');
+    jobs.forEach(function (job) {
+      var row = el('li');
+      var url = safeUrl(job.url);
+      var link = url ? el('a', null, job.title || '(ไม่มีชื่อตำแหน่ง)') : el('span', null, job.title || '(ไม่มีชื่อตำแหน่ง)');
+      if (url) {
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+      }
+      row.appendChild(link);
+      row.appendChild(el('span', 'iw-score', 'คะแนน ' + (typeof job.score === 'number' ? job.score : 0)));
+      list.appendChild(row);
+    });
+    if (!jobs.length) list.appendChild(el('li', 'iw-empty', 'ไม่มีงานของบริษัทนี้ในชุดที่แสดง'));
+    box.appendChild(list);
+    return box;
+  }
+
+  window.initMap = function () {
+    var host = document.getElementById('map');
+    if (!host) return;
+    if (!window.google || !google.maps) {
+      notice('โหลด Google Maps ไม่ได้ — ยังใช้แผงรายชื่อด้านขวาได้');
+      return;
+    }
+    var map;
+    try {
+      map = new google.maps.Map(host, {
+        center: DATA.center || { lat: 13.7563, lng: 100.5018 },
+        zoom: DATA.zoom || 11,
+        mapId: DATA.map_id || 'DEMO_MAP_ID',
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: true
+      });
+    } catch (err) {
+      notice('สร้างแผนที่ไม่ได้: ' + (err && err.message ? err.message : String(err)));
+      return;
+    }
+    var info = new google.maps.InfoWindow({ maxWidth: 340 });
+    var Advanced = google.maps.marker && google.maps.marker.AdvancedMarkerElement
+      ? google.maps.marker.AdvancedMarkerElement : null;
+    function openInfo(company, anchor) {
+      info.setContent(infoNode(company));
+      info.open({ map: map, anchor: anchor });
+    }
+    (DATA.companies || []).forEach(function (company) {
+      if (typeof company.lat !== 'number' || typeof company.lng !== 'number') return;
+      var position = { lat: company.lat, lng: company.lng };
+      var exact = company.accuracy === 'exact';
+      var marker;
+      if (Advanced) {
+        var pin = el('div', 'pin ' + (exact ? 'exact' : 'approx'), String((company.jobs || []).length));
+        pin.setAttribute('role', 'button');
+        pin.setAttribute('aria-label', company.company);
+        marker = new Advanced({ map: map, position: position, title: company.company, content: pin });
+      } else {
+        marker = new google.maps.Marker({
+          map: map,
+          position: position,
+          title: company.company,
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 8,
+            fillColor: exact ? EXACT_COLOR : APPROX_COLOR,
+            fillOpacity: 1,
+            strokeColor: '#ffffff',
+            strokeWeight: 2
+          }
+        });
+      }
+      marker.addListener('click', function () { openInfo(company, marker); });
+    });
+    READY = true;
+  };
+
+  window.addEventListener('load', function () {
+    setTimeout(function () {
+      if (READY) return;
+      notice('โหลด Google Maps ไม่ได้ภายใน 10 วินาที — ตรวจคีย์/การเปิด Maps JavaScript API '
+        + '(แผนที่ว่าง แต่รายชื่อบริษัทด้านขวายังครบ)');
+    }, 10000);
+  });
+})();
+</script>
+<script async
+  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBtKQhP7nikHrDRGPs5incRVjbXpjB9hm4&amp;language=th&amp;region=TH&amp;libraries=marker&amp;loading=async&amp;callback=initMap&amp;v=weekly"></script>
 </body>
 </html>
