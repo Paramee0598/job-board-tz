@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>หางาน IT กรุงเทพ — Job Board (ในเครื่อง)</title>
+<style>
+:root{--bg:#f7f8fa;--card:#fff;--ink:#1c2128;--muted:#6b7280;--line:#e3e6ea;--accent:#1f6feb;--chip:#eef1f5;--warn:#b45309}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-size:14px;line-height:1.45;padding-bottom:44px;
+ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Leelawadee UI","Noto Sans Thai",Tahoma,Arial,sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);padding:10px 16px 8px}
+.title-row{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+h1{font-size:18px;margin:0}
+.tag{font-size:12px;color:var(--muted);font-weight:400}
+.meta{margin-left:auto;font-size:12px;color:var(--muted)}
+.controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px;font-size:13px}
+.controls label{display:flex;align-items:center;gap:6px;color:var(--muted)}
+select,input[type=search]{font:inherit;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink)}
+input[type=search]{width:280px}
+button{font:inherit;cursor:pointer}
+#reset{padding:4px 8px;border:1px solid var(--line);background:#fff;border-radius:6px;color:var(--muted)}
+.filters{margin-top:8px;display:flex;flex-direction:column;gap:4px}
+.grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.gname{font-size:12px;color:var(--muted);flex:0 0 104px}
+.chip{border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:999px;padding:2px 9px;
+ font-size:12.5px;display:inline-flex;gap:5px;align-items:center}
+.chip b{font-weight:600;color:var(--muted);font-size:11.5px}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.chip.on b{color:#dbe7ff}
+.chip.zero{opacity:.45}
+main{padding:10px 16px 40px}
+table{border-collapse:collapse;width:100%;background:var(--card);border:1px solid var(--line)}
+thead th{position:sticky;top:0;background:#f1f3f7;text-align:left;font-size:12px;color:var(--muted);
+ padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+tbody td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:#f2f7ff}
+td.num{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted);white-space:nowrap;width:56px}
+td.title{font-weight:600;max-width:430px}
+td.small{color:var(--muted);font-size:12.5px}
+.gone{font-size:11px;color:var(--warn);font-weight:600;margin-left:4px}
+.badge{display:inline-block;font-size:11px;padding:1px 6px;border-radius:999px;background:var(--chip);color:#374151;margin-right:3px}
+.badge.linkedin{background:#dbeafe;color:#1e40af}
+.badge.jobsdb{background:#dcfce7;color:#166534}
+.badge.indeed{background:#ede9fe;color:#5b21b6}
+.badge.google{background:#fee2e2;color:#991b1b}
+.badge.facebook{background:#dbeafe;color:#1d4ed8}
+footer{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--line);
+ padding:8px 16px;font-size:12.5px;color:var(--muted);z-index:6}
+.empty{margin:24px 16px;padding:20px;background:var(--card);border:1px dashed var(--line)}
+.empty h2{margin:0 0 6px;font-size:16px}
+.empty p{margin:4px 0;color:var(--muted)}
+#noresult{padding:16px;color:var(--muted)}
+.warnbox{margin-top:8px;padding:6px 8px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:12.5px}
+.areacounts{margin-top:6px;font-size:12.5px;color:var(--muted)}
+.areacounts b{color:var(--ink);font-weight:600}
+td .loc{opacity:.75}
+.navlink{font-size:12.5px;color:var(--accent);text-decoration:none;border:1px solid var(--line);
+ border-radius:6px;padding:3px 8px;background:#fff;white-space:nowrap}
+.navlink:hover{background:#f2f7ff}
+.mkbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;font-size:12.5px}
+.mkbar .lbl{color:var(--muted)}
+.markchip{border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:999px;padding:2px 9px;
+ font-size:12.5px;display:inline-flex;gap:5px;align-items:center;cursor:pointer}
+.markchip b{font-weight:600;color:var(--muted);font-size:11.5px}
+.markchip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.markchip[aria-pressed="true"] b{color:#dbe7ff}
+.markchip.zero{opacity:.55}
+#clearMarks{padding:2px 9px;border:1px solid var(--line);background:#fff;border-radius:999px;color:var(--muted);
+ font-size:12.5px;cursor:pointer}
+td.mark{white-space:nowrap;width:1%}
+.mk{font:inherit;font-size:11.5px;line-height:1.6;border:1px solid var(--line);background:#fff;color:var(--muted);
+ border-radius:6px;padding:1px 6px;cursor:pointer;white-space:nowrap}
+.mk+.mk{margin-left:4px}
+.mk[aria-pressed="true"]{color:#fff}
+.mk.pinbtn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent)}
+.mk.seenbtn[aria-pressed="true"]{background:#166534;border-color:#166534}
+tbody tr.pinned{box-shadow:inset 3px 0 0 var(--accent);background:#f5f9ff}
+tbody tr.pinned td.title{color:#0b3d91}
+tbody tr.seen{opacity:.62}
+tbody tr.seen td.title{text-decoration:line-through}
+tbody tr.pinned.seen{opacity:.82}
+[hidden]{display:none !important}
+</style>
+</head>
+<body>
+<header>
+  <div class="title-row">
+    <h1>หางาน IT กรุงเทพ</h1>
+    <span class="tag">job board · รันในเครื่อง 100%</span>
+    <a class="navlink" id="maplink" href="map.html">เปิดแผนที่ (0 หมุด)</a>
+    <span class="meta">ข้อมูล: <strong id="gen">-</strong> · แสดง <strong id="count">0</strong> / <span id="total">0</span> แถว <span class="tag">(N = หลังกรอง preset · M = ผ่าน include)</span></span>
+  </div>
+  <div class="controls">
+    <label>preset <select id="preset"></select></label>
+    <label>ค้น <input id="q" type="search" placeholder="ตำแหน่ง · บริษัท · เขต · สกิล"></label>
+    <button id="reset" type="button">ล้างตัวกรอง</button>
+    <label><input id="hidegone" type="checkbox"> ซ่อน gone</label>
+  </div>
+  <div class="mkbar" id="mkbar">
+    <span class="lbl">เครื่องหมาย:</span>
+    <button type="button" class="markchip zero" id="chipPins" aria-pressed="false">📌 ปักหมุดแล้ว <b>0</b></button>
+    <button type="button" class="markchip zero" id="chipUnseen" aria-pressed="false">ยังไม่ดู <b>0</b></button>
+    <button type="button" class="markchip zero" id="chipSeen" aria-pressed="false">ดูแล้ว <b>0</b></button>
+    <button type="button" id="clearMarks">ล้างเครื่องหมาย</button>
+    <span class="lbl" id="mknote" hidden></span>
+  </div>
+  <div id="warn" class="warnbox" hidden></div>
+  <div id="filtersum" class="areacounts"></div>
+  <div id="areacounts" class="areacounts"></div>
+  <div id="filters" class="filters"></div>
+</header>
+<main>
+  <div id="empty" class="empty" hidden>
+    <h2 id="emptyTitle">ยังไม่เคยรัน</h2>
+    <p id="emptyText">ยังไม่มีข้อมูลงาน — รัน python src\run_all.py ก่อน</p>
+  </div>
+  <div id="noresult" hidden>ไม่มีงานตรงตัวกรองที่เลือก — กด "ล้างตัวกรอง" หรือเปลี่ยน preset</div>
+  <table id="tbl">
+    <thead>
+      <tr>
+        <th>คะแนน</th><th>ตำแหน่ง</th><th>บริษัท</th><th>เขต / จังหวัด</th>
+        <th>เงินเดือน</th><th>โหมด</th><th>แหล่ง</th><th>วันที่โพสต์</th><th>ทำเครื่องหมาย</th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+</main>
+<footer><span id="yesterday">เมื่อวานได้: -</span></footer>
+<script src="data.js"></script>
+<script>
+/*LOGIC_START*/
+(function (root) {
+  'use strict';
+  var META = root.META || {};
+  var RULES = META.area_rules || { bangkok: [], perimeter: [], other: [] };
+
+  function ageHours(posted) {
+    if (!posted) return null;
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(posted));
+    if (!m) return null;
+    var then = new Date(+m[1], +m[2] - 1, +m[3]);
+    var now = new Date();
+    var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var hours = (today - then) / 3600000;
+    return hours < 0 ? 0 : hours;
+  }
+
+  /* ย่านพื้นที่: province เท่านั้น — null/ว่าง = unknown (ไม่ระบุ) แยกจาก other */
+  function areaOf(job) {
+    var province = String(job.province || '').trim().toLowerCase();
+    if (!province) return 'unknown';
+    var list = RULES.bangkok || [];
+    var i;
+    for (i = 0; i < list.length; i++) {
+      var b = String(list[i]).toLowerCase();
+      if (b && province.indexOf(b) >= 0) return 'bangkok';
+    }
+    list = RULES.perimeter || [];
+    for (i = 0; i < list.length; i++) {
+      var p = String(list[i]).toLowerCase();
+      if (p && province.indexOf(p) >= 0) return 'perimeter';
+    }
+    return 'other';
+  }
+
+  function salaryBest(job) {
+    if (typeof job.salary_max === 'number') return job.salary_max;
+    if (typeof job.salary_min === 'number') return job.salary_min;
+    return null;
+  }
+
+  function hasSalary(job) {
+    return !!job.salary_text || salaryBest(job) !== null;
+  }
+
+  function haystack(job) {
+    var parts = [job.title, job.company, job.district, job.province, job.location, job.salary_text];
+    var skills = job.skills || [];
+    for (var i = 0; i < skills.length; i++) parts.push(skills[i]);
+    return parts.filter(Boolean).join(' ').toLowerCase();
+  }
+
+  function defaults(name) {
+    var presets = META.presets || {};
+    var p = presets[name] || { areas: [], max_age_hours: 336, salary: 'any', hide_gone: false };
+    return {
+      preset: name,
+      q: '',
+      sources: [],
+      areas: (p.areas || []).slice(),
+      work_modes: [],
+      seniorities: [],
+      salary: typeof p.salary === 'undefined' ? 'any' : p.salary,
+      max_age_hours: typeof p.max_age_hours === 'number' ? p.max_age_hours : 336,
+      hide_gone: p.hide_gone !== false
+    };
+  }
+
+  function matches(job, state, skip) {
+    if (state.hide_gone && job.status === 'gone' && skip !== 'hide_gone') return false;
+    var query = String(state.q || '').trim().toLowerCase();
+    if (query && skip !== 'q') {
+      var hay = haystack(job);
+      var tokens = query.split(/\s+/);
+      for (var i = 0; i < tokens.length; i++) {
+        if (tokens[i] && hay.indexOf(tokens[i]) < 0) return false;
+      }
+    }
+    if (skip !== 'sources') {
+      var chosen = state.sources || [];
+      if (chosen.length) {
+        var own = job.sources || [];
+        var hit = false;
+        for (var j = 0; j < own.length; j++) {
+          if (chosen.indexOf(own[j]) >= 0) { hit = true; break; }
+        }
+        if (!hit) return false;
+      }
+    }
+    if (skip !== 'areas') {
+      var pick = state.areas || [];
+      if (pick.length && pick.indexOf(areaOf(job)) < 0) return false;
+    }
+    if (skip !== 'work_modes') {
+      var modes = state.work_modes || [];
+      if (modes.length && modes.indexOf(job.work_mode || 'unknown') < 0) return false;
+    }
+    if (skip !== 'seniorities') {
+      var levels = state.seniorities || [];
+      if (levels.length && levels.indexOf(job.seniority || 'unknown') < 0) return false;
+    }
+    if (skip !== 'salary') {
+      var salary = state.salary || 'any';
+      if (salary !== 'any') {
+        if (salary === 'unspecified') {
+          if (hasSalary(job)) return false;
+        } else {
+          var best = salaryBest(job);
+          if (best === null || best < Number(salary)) return false;
+        }
+      }
+    }
+    if (skip !== 'max_age_hours' && state.max_age_hours) {
+      var hours = ageHours(job.posted_at);
+      if (hours !== null && hours > state.max_age_hours) return false; /* ไม่รู้วัน = ไม่ตัด */
+    }
+    return true;
+  }
+
+  function withPatch(state, patch) {
+    var out = {};
+    var key;
+    for (key in state) {
+      if (Object.prototype.hasOwnProperty.call(state, key)) out[key] = state[key];
+    }
+    for (key in patch) {
+      if (Object.prototype.hasOwnProperty.call(patch, key)) out[key] = patch[key];
+    }
+    return out;
+  }
+
+  function countWith(state, patch) {
+    var jobs = root.JOBS || [];
+    var view = withPatch(state, patch);
+    var n = 0;
+    for (var i = 0; i < jobs.length; i++) {
+      if (matches(jobs[i], view)) n++;
+    }
+    return n;
+  }
+
+  function filterJobs(state) {
+    var jobs = root.JOBS || [];
+    var out = [];
+    for (var i = 0; i < jobs.length; i++) {
+      if (matches(jobs[i], state)) out.push(jobs[i]);
+    }
+    return out;
+  }
+
+  function num(job) {
+    return typeof job.score === 'number' ? job.score : 0;
+  }
+
+  function sortJobs(rows) {
+    return rows.slice().sort(function (a, b) {
+      if (num(b) !== num(a)) return num(b) - num(a);
+      var da = a.posted_at || '';
+      var db = b.posted_at || '';
+      if (da !== db) return da < db ? 1 : -1;
+      return String(a.title || '').localeCompare(String(b.title || ''), 'th');
+    });
+  }
+
+  root.JOBVIEW = {
+    defaults: defaults,
+    matches: matches,
+    filterJobs: filterJobs,
+    sortJobs: sortJobs,
+    countWith: countWith,
+    areaOf: areaOf,
+    ageHours: ageHours,
+    hasSalary: hasSalary,
+    salaryBest: salaryBest
+  };
+})(window);
+/*LOGIC_END*/
+</script>
+<script>
+(function () {
+  'use strict';
+  var V = window.JOBVIEW;
+  var META = window.META || {};
+  var JOBS = window.JOBS || [];
+  if (!V) return;
+  var KEY = 'jobboard.view.v1';
+  var PRESETS = META.presets || {};
+  var ORDER = META.source_order || [];
+  var LABEL = META.source_label || {};
+  var AREA_LABELS = [['bangkok', 'กรุงเทพ'], ['perimeter', 'ปริมณฑล'],
+                     ['other', 'พื้นที่อื่น'], ['unknown', 'พื้นที่ไม่ระบุ']];
+  function $(id) { return document.getElementById(id); }
+
+  /* ---------- เครื่องหมาย: 📌 ปักหมุด / ✓ ดูแล้ว (ต่อ job.id) ----------
+     เก็บใน localStorage['jobboard.pins'] / ['jobboard.seen'] = JSON array ของ id
+     localStorage ใช้ไม่ได้ (เช่น file:// ที่ถูกบล็อก) = เก็บในหน่วยความจำเฉพาะรอบนี้ ไม่ throw */
+  var PINS_KEY = 'jobboard.pins';
+  var SEEN_KEY = 'jobboard.seen';
+  var storeOK = (function () {
+    try {
+      var probe = '__jobboard_probe__';
+      localStorage.setItem(probe, '1');
+      localStorage.removeItem(probe);
+      return true;
+    } catch (e) { return false; }
+  })();
+
+  function readIds(key) {
+    if (!storeOK) return [];
+    try {
+      var raw = localStorage.getItem(key);
+      var arr = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(arr)) return [];
+      var out = [];
+      arr.forEach(function (v) {
+        var s = String(v == null ? '' : v);
+        if (s && out.indexOf(s) < 0) out.push(s);
+      });
+      return out;
+    } catch (e) { return []; }
+  }
+
+  function writeIds(key, list) {
+    if (!storeOK) return;
+    try { localStorage.setItem(key, JSON.stringify(list)); } catch (e) { /* ไม่เป็นไร */ }
+  }
+
+  function hasId(list, id) { return list.indexOf(String(id == null ? '' : id)) >= 0; }
+
+  function toggleId(list, id) {
+    var s = String(id);
+    var at = list.indexOf(s);
+    var out = list.slice();
+    if (at >= 0) out.splice(at, 1); else out.push(s);
+    return out;
+  }
+
+  var pinIds = readIds(PINS_KEY);
+  var seenIds = readIds(SEEN_KEY);
+  var marksOnly = { pins: false, seen: null };  /* ชั้นแสดงผลเท่านั้น: seen = null | 'seen' | 'unseen' */
+
+  function presetNames() {
+    var names = Object.keys(PRESETS);
+    names.sort(function (a, b) { return (PRESETS[a].order || 0) - (PRESETS[b].order || 0); });
+    return names;
+  }
+
+  function fallbackPreset() {
+    if (META.active_preset && PRESETS[META.active_preset]) return META.active_preset;
+    var names = presetNames();
+    return names.indexOf('balanced') >= 0 ? 'balanced' : (names[0] || 'wide');
+  }
+
+  function loadState() {
+    var base = V.defaults(fallbackPreset());
+    try {
+      var saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+      if (saved && PRESETS[saved.preset]) {
+        var fresh = V.defaults(saved.preset);
+        Object.keys(fresh).forEach(function (k) {
+          if (!Object.prototype.hasOwnProperty.call(saved, k)) return;
+          if (Array.isArray(fresh[k])) {
+            if (Array.isArray(saved[k])) fresh[k] = saved[k];
+            return;
+          }
+          if (typeof saved[k] === typeof fresh[k]) fresh[k] = saved[k];
+        });
+        base = fresh;
+      }
+    } catch (e) { /* localStorage ปิด = ใช้ค่า preset */ }
+    return base;
+  }
+
+  function saveState() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ไม่เป็นไร */ }
+  }
+
+  var state = loadState();
+
+  function fmt(n) { return Number(n).toLocaleString('en-US'); }
+
+  var GROUPS = [
+    { key: 'sources', name: 'แหล่ง', multi: true, items: function () {
+        return ORDER.map(function (s) { return [s, LABEL[s] || s]; });
+      } },
+    { key: 'areas', name: 'เขต / จังหวัด', multi: true, items: function () {
+        return AREA_LABELS.slice();
+      } },
+    { key: 'work_modes', name: 'โหมด', multi: true, items: function () {
+        return [['remote', 'remote'], ['hybrid', 'hybrid'],
+                ['onsite', 'onsite'], ['unknown', 'ไม่ระบุ']];
+      } },
+    { key: 'seniorities', name: 'ระดับ', multi: true, items: function () {
+        return [['intern', 'intern'], ['junior', 'junior'], ['mid', 'mid'],
+                ['senior', 'senior'], ['lead', 'lead'], ['manager', 'manager'],
+                ['unknown', 'ไม่ระบุ']];
+      } },
+    { key: 'salary', name: 'เงินเดือน', multi: false, items: function () {
+        var out = [['any', 'ทั้งหมด'], ['unspecified', 'ไม่ระบุเงินเดือน']];
+        (META.salary_steps || []).forEach(function (step) { out.push([step, '≥ ' + fmt(step)]); });
+        return out;
+      } },
+    { key: 'max_age_hours', name: 'อายุประกาศ', multi: false, items: function () {
+        return [[0, 'ทั้งหมด'], [24, '24 ชม.'], [72, '72 ชม.'], [168, '168 ชม.'], [336, '336 ชม.']];
+      } }
+  ];
+
+  function groupBy(key) {
+    for (var i = 0; i < GROUPS.length; i++) if (GROUPS[i].key === key) return GROUPS[i];
+    return null;
+  }
+
+  function chipValue(group, raw) {
+    if (group.key === 'max_age_hours') return Number(raw);
+    if (group.key === 'salary' && raw !== 'any' && raw !== 'unspecified') return Number(raw);
+    return raw;
+  }
+
+  function isOn(group, value) {
+    var current = state[group.key];
+    if (group.multi) return (current || []).indexOf(value) >= 0;
+    return String(current) === String(value);
+  }
+
+  function chipCount(group, value) {
+    var patch = {};
+    patch[group.key] = group.multi ? [value] : value;
+    return V.countWith(state, patch);
+  }
+
+  function toggleChip(group, value) {
+    if (group.multi) {
+      var list = (state[group.key] || []).slice();
+      var at = list.indexOf(value);
+      if (at >= 0) list.splice(at, 1); else list.push(value);
+      state[group.key] = list;
+    } else {
+      state[group.key] = value;
+    }
+    saveState();
+    renderAll();
+  }
+
+  function renderFilters() {
+    var box = $('filters');
+    box.textContent = '';
+    GROUPS.forEach(function (group) {
+      var row = document.createElement('div');
+      row.className = 'grp';
+      var name = document.createElement('span');
+      name.className = 'gname';
+      name.textContent = group.name;
+      row.appendChild(name);
+      group.items().forEach(function (pair) {
+        var raw = pair[0];
+        var value = chipValue(group, raw);
+        var count = chipCount(group, value);
+        var chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'chip' + (isOn(group, value) ? ' on' : '') + (count ? '' : ' zero');
+        chip.dataset.group = group.key;
+        chip.dataset.value = String(raw);
+        chip.appendChild(document.createTextNode(pair[1] + ' '));
+        var badge = document.createElement('b');
+        badge.textContent = String(count);
+        chip.appendChild(badge);
+        row.appendChild(chip);
+      });
+      box.appendChild(row);
+    });
+  }
+
+  /* คอลัมน์พื้นที่: province ถ้ามี + location ต้นฉบับต่อท้ายเมื่อต่างกัน (ห้ามแปล) */
+  function whereParts(job) {
+    var province = String(job.province || '').trim();
+    var district = String(job.district || '').trim();
+    var location = String(job.location || '').trim();
+    var primary = province || district || location;
+    var extra = (location && location !== primary) ? location : '';
+    return { primary: primary, extra: extra };
+  }
+
+  /* ตัวกรองของเครื่องหมาย = ชั้นแสดงผล ทับหลัง V.filterJobs (ไม่แตะ JOBS/ตรรกะกรอง/preset) */
+  function markFiltered(rows) {
+    if (!marksOnly.pins && !marksOnly.seen) return rows;
+    return rows.filter(function (job) {
+      var id = String(job.id == null ? '' : job.id);
+      if (marksOnly.pins && !hasId(pinIds, id)) return false;
+      if (marksOnly.seen === 'seen' && !hasId(seenIds, id)) return false;
+      if (marksOnly.seen === 'unseen' && hasId(seenIds, id)) return false;
+      return true;
+    });
+  }
+
+  function markButton(kind, id, pressed) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'mk ' + (kind === 'pin' ? 'pinbtn' : 'seenbtn');
+    btn.dataset.mark = kind;
+    btn.dataset.jobId = id;
+    btn.setAttribute(kind === 'pin' ? 'data-pin' : 'data-seen', id);
+    btn.id = (kind === 'pin' ? 'pin-' : 'seen-') + id;
+    btn.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+    btn.title = (kind === 'pin' ? 'ปักหมุดงานนี้ (แสดงในแผนที่): ' : 'ทำเครื่องหมายว่าดูแล้ว: ') + id;
+    btn.textContent = kind === 'pin'
+      ? (pressed ? '📌 ปักแล้ว' : '📌 ปักหมุด')
+      : '✓ ดูแล้ว';
+    return btn;
+  }
+
+  function markCell(job) {
+    var id = String(job.id == null ? '' : job.id);
+    var td = document.createElement('td');
+    td.className = 'mark';
+    td.appendChild(markButton('pin', id, hasId(pinIds, id)));
+    td.appendChild(markButton('seen', id, hasId(seenIds, id)));
+    return td;
+  }
+
+  function renderTable() {
+    var body = $('rows');
+    body.textContent = '';
+    var rows = markFiltered(V.sortJobs(V.filterJobs(state)));
+    rows.forEach(function (job) {
+      var tr = document.createElement('tr');
+      tr.tabIndex = 0;
+      var rowId = String(job.id == null ? '' : job.id);
+      tr.dataset.jobId = rowId;
+      if (hasId(pinIds, rowId)) tr.className = 'pinned';
+      if (hasId(seenIds, rowId)) tr.className = (tr.className ? tr.className + ' ' : '') + 'seen';
+      if (job.url) {
+        tr.dataset.url = job.url;
+        tr.title = 'เปิดประกาศ: ' + (job.title || '');
+      }
+      var td = document.createElement('td');
+      td.className = 'num';
+      td.textContent = String(typeof job.score === 'number' ? job.score : 0);
+      tr.appendChild(td);
+
+      td = document.createElement('td');
+      td.className = 'title';
+      td.textContent = job.title || '';
+      if (job.status === 'gone') {
+        var gone = document.createElement('span');
+        gone.className = 'gone';
+        gone.textContent = 'gone';
+        td.appendChild(gone);
+      }
+      tr.appendChild(td);
+
+      td = document.createElement('td');
+      td.className = 'small';
+      td.textContent = job.company || '';
+      tr.appendChild(td);
+
+      td = document.createElement('td');
+      td.className = 'small';
+      var where = whereParts(job);
+      td.textContent = where.primary;
+      if (where.extra) {
+        var loc = document.createElement('span');
+        loc.className = 'loc';
+        loc.textContent = ' · ' + where.extra;
+        td.appendChild(loc);
+      }
+      tr.appendChild(td);
+
+      td = document.createElement('td');
+      td.className = 'small';
+      td.textContent = job.salary_text || '';
+      tr.appendChild(td);
+
+      td = document.createElement('td');
+      td.className = 'small';
+      td.textContent = job.work_mode || '';
+      tr.appendChild(td);
+
+      td = document.createElement('td');
+      (job.sources || []).forEach(function (s) {
+        var badge = document.createElement('span');
+        badge.className = 'badge ' + s;
+        badge.textContent = LABEL[s] || s;
+        td.appendChild(badge);
+      });
+      tr.appendChild(td);
+
+      td = document.createElement('td');
+      td.className = 'small';
+      td.textContent = job.posted_at || '';
+      tr.appendChild(td);
+
+      tr.appendChild(markCell(job));
+
+      body.appendChild(tr);
+    });
+    return rows.length;
+  }
+
+  /* ตรวจย้อนได้บนหน้าเว็บ: คลัง → ผ่าน include → ผ่านตัวกรอง · แยกเหตุผลที่ตัด */
+  function renderFilterSum() {
+    var box = $('filtersum');
+    if (!box) return;
+    var f = META.filters || {};
+    if (typeof f.total !== 'number') { box.textContent = ''; return; }
+    var d = f.dropped || {};
+    var text = 'คัดจากคลัง ' + f.total + ' แถว → ผ่าน include ' + (f.include_pass || 0) +
+      ' → ผ่านตัวกรอง ' + (f.kept || 0) + ' · ตัด: must_not ' + (d.must_not || 0) +
+      ' · include ไม่ถึง ' + (d.include_miss || 0) + ' · นอกพื้นที่ ' + (d.area_outside || 0);
+    if (d.salary_below_min) text += ' · เงินเดือนต่ำกว่าเกณฑ์ ' + d.salary_below_min;
+    box.textContent = text;
+  }
+
+  function renderAreaCounts() {
+    var box = $('areacounts');
+    if (!box) return;
+    var counts = META.area_counts || {};
+    box.textContent = 'ย่านพื้นที่: ';
+    AREA_LABELS.forEach(function (pair, i) {
+      if (i) box.appendChild(document.createTextNode(' · '));
+      box.appendChild(document.createTextNode(pair[1] + ' '));
+      var b = document.createElement('b');
+      b.textContent = String(typeof counts[pair[0]] === 'number' ? counts[pair[0]] : 0);
+      box.appendChild(b);
+    });
+  }
+
+  /* ชิปนับ + ลิงก์แผนที่: นับจาก JOBS ที่โหลดมา (จำนวนงานไม่เปลี่ยน) */
+  function knownPins() {
+    var byId = {};
+    JOBS.forEach(function (job) { byId[String(job.id == null ? '' : job.id)] = true; });
+    return pinIds.filter(function (id) { return byId[id]; });
+  }
+
+  function renderMarks() {
+    var ids = knownPins();
+    var pinsN = ids.length;
+    var seenN = 0;
+    JOBS.forEach(function (job) { if (hasId(seenIds, String(job.id == null ? '' : job.id))) seenN++; });
+    var unseenN = JOBS.length - seenN;
+
+    function chip(id, on, n) {
+      var node = $(id);
+      if (!node) return;
+      node.setAttribute('aria-pressed', on ? 'true' : 'false');
+      node.className = 'markchip' + (n ? '' : ' zero');
+      var badge = node.querySelector('b');
+      if (badge) badge.textContent = String(n);
+    }
+    chip('chipPins', marksOnly.pins, pinsN);
+    chip('chipUnseen', marksOnly.seen === 'unseen', unseenN);
+    chip('chipSeen', marksOnly.seen === 'seen', seenN);
+
+    var link = $('maplink');
+    if (link) {
+      link.textContent = 'เปิดแผนที่ (' + pinsN + ' หมุด)';
+      link.href = 'map.html' + (pinsN ? '?pins=' + ids.map(encodeURIComponent).join(',') : '');
+    }
+    var note = $('mknote');
+    if (note) {
+      if (storeOK) {
+        note.hidden = true;
+        note.textContent = '';
+      } else {
+        note.hidden = false;
+        note.textContent = 'บันทึกเครื่องหมายไม่ได้ (localStorage ใช้ไม่ได้) — ใช้ได้เฉพาะรอบนี้';
+      }
+    }
+  }
+
+  function renderFooter() {
+    var y = META.yesterday || {};
+    var counts = y.counts || {};
+    var parts = ORDER.map(function (s) {
+      var n = counts[s];
+      return (LABEL[s] || s) + ' ' + (typeof n === 'number' ? n : '-');
+    });
+    var text = 'เมื่อวานได้: ' + (parts.join(' · ') || '-');
+    if (!y.log) text += ' · ไม่มี log ของ ' + (y.date || 'เมื่อวาน');
+    $('yesterday').textContent = text;
+  }
+
+  function renderAll() {
+    $('gen').textContent = META.generated_at || '-';
+    $('total').textContent = String(typeof META.include_total === 'number'
+      ? META.include_total : JOBS.length);
+    $('preset').value = state.preset;
+    if ($('q').value !== (state.q || '')) $('q').value = state.q || '';
+    $('hidegone').checked = !!state.hide_gone;
+
+    if (!JOBS.length) {
+      var f = META.filters || {};
+      var hadData = typeof f.total === 'number' && f.total > 0;
+      $('empty').hidden = false;
+      $('emptyTitle').textContent = hadData ? 'ไม่มีงานที่ผ่านตัวกรอง' : 'ยังไม่เคยรัน';
+      $('emptyText').textContent = hadData
+        ? (f.total + ' แถวในคลัง · ผ่าน include ' + (f.include_pass || 0) +
+           ' · ผ่านตัวกรองทั้งชุด 0 — ตรวจ config\\filters.json')
+        : (META.note || 'ยังไม่มีข้อมูลงาน — รัน python src\\run_all.py ก่อน');
+      $('filters').hidden = true;
+      $('tbl').hidden = true;
+      $('noresult').hidden = true;
+      $('count').textContent = '0';
+      renderMarks();
+      renderFilterSum();
+      renderFooter();
+      return;
+    }
+
+    $('empty').hidden = true;
+    $('filters').hidden = false;
+    $('tbl').hidden = false;
+    if (META.note) {
+      $('warn').hidden = false;
+      $('warn').textContent = META.note;
+    } else {
+      $('warn').hidden = true;
+    }
+    renderFilterSum();
+    renderAreaCounts();
+    renderFilters();
+    renderMarks();
+    var shown = renderTable();
+    $('count').textContent = String(shown);
+    $('noresult').hidden = shown !== 0;
+    renderFooter();
+  }
+
+  function openRow(tr) {
+    if (!tr || !tr.dataset || !tr.dataset.url) return;
+    window.open(tr.dataset.url, '_blank', 'noopener');
+  }
+
+  $('filters').addEventListener('click', function (ev) {
+    var chip = ev.target.closest ? ev.target.closest('.chip') : null;
+    if (!chip) return;
+    var group = groupBy(chip.dataset.group);
+    if (group) toggleChip(group, chipValue(group, chip.dataset.value));
+  });
+
+  function toggleMark(kind, id) {
+    var s = String(id == null ? '' : id);
+    if (!s) return;
+    if (kind === 'pin') {
+      pinIds = toggleId(pinIds, s);
+      writeIds(PINS_KEY, pinIds);
+    } else {
+      seenIds = toggleId(seenIds, s);
+      writeIds(SEEN_KEY, seenIds);
+    }
+    renderAll();
+    var again = document.getElementById((kind === 'pin' ? 'pin-' : 'seen-') + s);
+    if (again) { try { again.focus(); } catch (e) { /* ไม่เป็นไร */ } }
+  }
+
+  $('rows').addEventListener('click', function (ev) {
+    var btn = ev.target.closest ? ev.target.closest('button.mk') : null;
+    if (btn) {
+      toggleMark(btn.dataset.mark, btn.dataset.jobId);
+      return;
+    }
+    openRow(ev.target.closest ? ev.target.closest('tr') : null);
+  });
+
+  $('rows').addEventListener('keydown', function (ev) {
+    if (ev.target.closest && ev.target.closest('button')) return;
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    var tr = ev.target.closest ? ev.target.closest('tr') : null;
+    if (!tr || !tr.dataset.url) return;
+    ev.preventDefault();
+    openRow(tr);
+  });
+
+  $('preset').addEventListener('change', function (ev) {
+    state = V.defaults(ev.target.value);
+    saveState();
+    renderAll();
+  });
+
+  $('q').addEventListener('input', function (ev) {
+    state.q = ev.target.value;
+    saveState();
+    renderAll();
+  });
+
+  $('reset').addEventListener('click', function () {
+    state = V.defaults(state.preset);
+    saveState();
+    renderAll();
+  });
+
+  $('hidegone').addEventListener('change', function (ev) {
+    state.hide_gone = ev.target.checked;
+    saveState();
+    renderAll();
+  });
+
+  if ($('chipPins')) $('chipPins').addEventListener('click', function () {
+    marksOnly.pins = !marksOnly.pins;
+    renderAll();
+  });
+
+  if ($('chipUnseen')) $('chipUnseen').addEventListener('click', function () {
+    marksOnly.seen = marksOnly.seen === 'unseen' ? null : 'unseen';
+    renderAll();
+  });
+
+  if ($('chipSeen')) $('chipSeen').addEventListener('click', function () {
+    marksOnly.seen = marksOnly.seen === 'seen' ? null : 'seen';
+    renderAll();
+  });
+
+  if ($('clearMarks')) $('clearMarks').addEventListener('click', function () {
+    pinIds = [];
+    seenIds = [];
+    writeIds(PINS_KEY, pinIds);
+    writeIds(SEEN_KEY, seenIds);
+    marksOnly.pins = false;
+    marksOnly.seen = null;
+    renderAll();
+  });
+
+  presetNames().forEach(function (name) {
+    var opt = document.createElement('option');
+    var spec = PRESETS[name] || {};
+    opt.value = name;
+    opt.textContent = name + (spec.desc ? ' — ' + spec.desc : '');
+    $('preset').appendChild(opt);
+  });
+
+  renderAll();
+})();
+</script>
+</body>
+</html>
