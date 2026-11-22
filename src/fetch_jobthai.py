@@ -455,7 +455,7 @@ def _payload(keywords, pages, delay_s, timeout_s, base, search_path, out_path,
             "timeout_seconds": timeout_s,
             "user_agent": USER_AGENT,
             "session": "T0 (cookieless)",
-            "out": str(out_path.relative_to(ROOT)) if _is_under(out_path, ROOT) else str(out_path),
+            "out": _rel(out_path),
         },
         "logs": logs,
         "raw": envelopes,
@@ -496,12 +496,17 @@ def _merge_payload(path: Path, new: dict, keywords) -> dict:
     return merged
 
 
-def _is_under(path: Path, parent: Path) -> bool:
+def _rel(path) -> str:
+    """path → ข้อความที่อ้างจาก ROOT ถ้าอยู่ใต้ ROOT (path สัมพัทธ์ก็ได้) · นอก ROOT = คงข้อความเดิม.
+
+    ต้อง resolve ก่อน relative_to: 'data\\raw\\x.json'.relative_to(ROOT) โยน ValueError แม้ cwd = ROOT
+    (เขียน --out เป็น path สัมพัทธ์ตาม CLI แล้วพัง — เจอตอนรันจริง)
+    """
+    p = Path(path)
     try:
-        Path(path).resolve().relative_to(Path(parent).resolve())
-        return True
-    except ValueError:
-        return False
+        return str(p.resolve().relative_to(Path(ROOT).resolve()))
+    except (ValueError, OSError):
+        return str(p)
 
 
 # ---------------------------------------------------------------------------- cli
