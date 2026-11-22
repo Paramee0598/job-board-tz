@@ -57,6 +57,16 @@
     "timeout_seconds": 30,
     "user_agent": "Mozilla/5.0 (compatible; TzJobBoard/1.0; personal job search)"
   },
+  "jobtopgun_web": {
+    "_note": "jobtopgun เก็บจากหน้า search HTML ตรง ๆ (src\\fetch_jobtopgun.py) — ฟรี ไม่ใช้ Apify ไม่ต้องมี token. คีย์ jobtopgun ด้านบนยังเป็นของ Apify (wave 2) ไม่ได้ถูกแทน. pagination จริง = ?keyword=<kw>&page=<n> (วัด 22 พ.ย. 69)",
+    "base_url": "https://www.jobtopgun.com",
+    "search_path": "/th/jobs",
+    "keywords": ["cloud", "vmware", "esxi", "hyper-v", "virtualization", "proxmox", "nutanix", "devops"],
+    "pages": 2,
+    "delay_seconds": 1.5,
+    "timeout_seconds": 30,
+    "user_agent": "Mozilla/5.0 (compatible; TzJobBoard/1.0; personal job search)"
+  },
   "limits": {
     "_note": "เพดานต่อวันต่อแหล่ง ตาม §5 กติกาการรันต่อแหล่ง",
     "facebook": { "runs_per_day": 1, "max_groups": 3, "posts_per_group": 150, "days_back": 2 },

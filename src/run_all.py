@@ -33,10 +33,17 @@ RUNS = ROOT / "runs"
 
 import fetch_jobspy  # noqa: E402  (อยู่ src\ เดียวกัน)
 import fetch_jobthai  # noqa: E402  (jobthai.com ผ่านหน้าเว็บ — ฟรี ไม่ต้องมี token)
+import fetch_jobtopgun  # noqa: E402  (jobtopgun.com ผ่านหน้าเว็บ — ฟรี ไม่ต้องมี token)
 import normalize as norm  # noqa: E402
 
 BUDGET_CAP_USD = 4.0
 PAID_BOARDS = ("jobthai", "jobtopgun", "facebook")
+
+# เว็บที่ HTML มาฝั่ง server (ฟรี): (ชื่อแหล่ง, โมดูล, สวิตช์ใน config\switches.json)
+WEB_SOURCES = (
+    ("jobthai", fetch_jobthai, "boards.jobthai"),
+    ("jobtopgun", fetch_jobtopgun, "boards.jobtopgun"),
+)
 
 
 # ------------------------------------------------------------------------ utils
@@ -124,21 +131,29 @@ def stage_fetch(today: date, sw: dict, keywords=None) -> dict:
 
 
 def stage_fetch_web(today: date, sw: dict, keywords=None) -> dict:
-    """jobthai.com ผ่านหน้า search (ฟรี ไม่ใช้ Apify) — ขั้นนี้อยู่ก่อน normalize.
+    """เว็บที่ HTML มาฝั่ง server (ฟรี ไม่ใช้ Apify): jobthai.com + jobtopgun.com.
 
-    เปิด/ปิดด้วยสวิตช์เดิม boards.jobthai (strict = ปิด).
+    ทั้งคู่อยู่ขั้นเดียวกันก่อน normalize · เปิด/ปิดแยกด้วยสวิตช์เดิม boards.jobthai /
+    boards.jobtopgun (strict = ปิดทั้งคู่) · แหล่งหนึ่งพัง/เน็ตล่ม = รายงานแล้วไปต่อ
+    แหล่งอื่น ไม่ทำให้ pipeline ทั้งเส้นตาย
     """
-    if not sw.get("boards.jobthai", True):
+    parts: list[dict] = []
+    for source, module, switch in WEB_SOURCES:
+        if not sw.get(switch, True):
+            continue
+        try:
+            res = dict(module.run(keywords=keywords, day=today))
+        except Exception as exc:  # เน็ต/ไลบรารีพัง = รายงาน ไม่ทำให้ pipeline ทั้งเส้นตาย
+            parts.append({"path": None, "per_source": {}, "cost_usd": 0.0, "logs": [],
+                          "total_rows": 0,
+                          "errors": [f"{source}_web: {type(exc).__name__}: {exc}"]})
+            continue
+        res["per_source"] = {source: int(res.get("total_rows") or 0)}
+        parts.append(res)
+    if not parts:
         return {"path": None, "per_source": {}, "errors": [], "cost_usd": 0.0,
                 "logs": [], "total_rows": 0, "skipped": "board_disabled"}
-    try:
-        res = fetch_jobthai.run(keywords=keywords, day=today)
-    except Exception as exc:  # เน็ต/ไลบรารีพัง = รายงาน ไม่ทำให้ pipeline ทั้งเส้นตาย
-        return {"path": None, "per_source": {}, "cost_usd": 0.0, "logs": [],
-                "total_rows": 0,
-                "errors": [f"jobthai_web: {type(exc).__name__}: {exc}"]}
-    res["per_source"] = {"jobthai": res.get("total_rows") or 0}
-    return res
+    return merge_fetch(*parts)
 
 
 def merge_fetch(*parts: dict) -> dict:
@@ -259,21 +274,28 @@ def stage_log(today: date, fetch: dict, nres: dict, build: dict, sw: dict,
         if sw.get(f"boards.{source}") and not by_source.get(source):
             lines.append(f"| {source} | 0 | 0 | $0.00 | wave 2: ยังไม่มี APIFY_TOKEN → no_token |")
 
-    # jobthai ผ่านเว็บ (ฟรี): คนละทางกับ Apify ข้างบน — แยกตารางให้เห็นทีละคำ/ทีละหน้า
-    web_logs = by_source.get("jobthai", [])
-    lines += ["", "## jobthai (เว็บ, ฟรี ไม่ใช้ Apify)", ""]
-    if web_logs:
-        kws = sorted({str(log.get("keyword")) for log in web_logs if log.get("keyword")})
-        lines += [f"- keywords: {', '.join(kws)}", "",
-                  "| keyword | page | http | results | error |", "|---|---|---|---|---|"]
-        for log in web_logs:
-            lines.append(
-                f"| {_cell(log.get('keyword'))} | "
-                f"{_cell(log.get('page'))} | "
-                f"{_cell(log.get('http'))} | "
-                f"{int(log.get('results') or 0)} | {_cell(log.get('error'))} |")
-    else:
-        lines.append("- ไม่ได้ยิงรอบนี้ (สวิตช์ปิด/--skip-fetch ไม่มีไฟล์ดิบของวันนี้)")
+    # jobthai + jobtopgun ผ่านเว็บ (ฟรี): คนละทางกับ Apify ข้างบน — แยกตารางให้เห็นทีละคำ/ทีละหน้า
+    for source in ("jobthai", "jobtopgun"):
+        web_logs = by_source.get(source, [])
+        lines += ["", f"## {source} (เว็บ, ฟรี ไม่ใช้ Apify)", ""]
+        if web_logs:
+            kws = sorted({str(log.get("keyword")) for log in web_logs if log.get("keyword")})
+            got = sum(int(log.get("results") or 0) for log in web_logs)
+            notes = sorted({str(log.get("note")) for log in web_logs if log.get("note")})
+            lines += [f"- keywords: {', '.join(_cell(k) for k in kws)}",
+                      f"- รวม: {got} แถว · request ต่อหน้า: {len(web_logs)}"]
+            if notes:
+                lines.append(f"- note: {', '.join(_cell(n) for n in notes)}")
+            lines += ["",
+                      "| keyword | page | http | results | error |", "|---|---|---|---|---|"]
+            for log in web_logs:
+                lines.append(
+                    f"| {_cell(log.get('keyword'))} | "
+                    f"{_cell(log.get('page'))} | "
+                    f"{_cell(log.get('http'))} | "
+                    f"{int(log.get('results') or 0)} | {_cell(log.get('error'))} |")
+        else:
+            lines.append("- ไม่ได้ยิงรอบนี้ (สวิตช์ปิด/--skip-fetch ไม่มีไฟล์ดิบของวันนี้)")
 
     lines += [
         "",
@@ -332,14 +354,15 @@ def main(argv=None) -> int:
         return 0
 
     if "--skip-fetch" in argv:
-        fetch = merge_fetch(load_raw_logs(today, "jobspy"), load_raw_logs(today, "jobthai"))
+        fetch = merge_fetch(load_raw_logs(today, "jobspy"), load_raw_logs(today, "jobthai"),
+                            load_raw_logs(today, "jobtopgun"))
         notes.append("--skip-fetch: ใช้ผลดิบที่มีอยู่ ไม่ยิงใหม่")
     else:
         keywords = []
         for i, arg in enumerate(argv):
             if arg == "--keywords" and i + 1 < len(argv):
                 keywords.append(argv[i + 1])
-        # jobthai (เว็บ) ก่อน แล้วค่อย JobSpy — ทั้งคู่อยู่ก่อน normalize และไม่พึ่ง Apify
+        # jobthai + jobtopgun (เว็บ) ก่อน แล้วค่อย JobSpy — ทั้งคู่อยู่ก่อน normalize และไม่พึ่ง Apify
         web = stage_fetch_web(today, sw, keywords or None)
         spy = stage_fetch(today, sw, keywords or None)
         fetch = merge_fetch(spy, web)

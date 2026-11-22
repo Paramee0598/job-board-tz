@@ -10,6 +10,8 @@
   · หมุด = AdvancedMarkerElement + mapId "DEMO_MAP_ID" (ข้อกำหนดของ Maps Demo Key)
     ถ้าไลบรารี marker ไม่มา → ถอยไปใช้ google.maps.Marker ธรรมดา (สีเดียวกัน) ไม่ปล่อยหน้าเปล่า
   · คลิกหมุด → info window: ชื่อ · ที่อยู่จาก Google · ป้ายความแม่น · รายชื่องาน (ชื่อ + คะแนน) ลิงก์แท็บใหม่
+  · มุมมอง 3 โหมด (all = ทั้งหมด · pinned = เฉพาะบริษัทที่ปัก · mix = ทั้งหมด + ไฮไลต์ที่ปัก = ค่าเริ่มต้น)
+    เก็บใน localStorage['jobboard.mapview'] · ?view=all|pinned|mix ทับ · ค่าไม่ถูกต้อง → mix
   · ข้อมูลงาน/คะแนนคิดสดจาก data\\jobs.json ด้วย src\\filters.py (ไม่ใช้ค่าที่ค้างใน companies.json)
   · ข้อความจากประกาศงาน (title/company) ใส่ด้วย textContent เท่านั้น — ไม่ innerHTML
   · ลิงก์ภายนอกต้องขึ้นต้น http(s):// เท่านั้น (กัน javascript: จากต้นทาง)
@@ -375,6 +377,13 @@ a{color:var(--accent)}
 .warn{margin-top:8px;padding:7px 9px;background:var(--warn);border:1px solid var(--warnline);
  color:var(--warnink);font-size:12.5px;border-radius:6px}
 .warn code{background:#fff;border:1px solid var(--warnline);border-radius:4px;padding:0 4px}
+.viewbar{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center}
+.viewbtn{font:inherit;font-size:12.5px;padding:3px 10px;border:1px solid var(--line);background:#fff;color:var(--ink);
+ border-radius:999px;cursor:pointer;line-height:18px}
+.viewbtn:hover{border-color:var(--accent);color:var(--accent)}
+.viewbtn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.viewbtn[aria-pressed="true"]:hover{color:#fff}
+.viewbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 main{flex:1 1 auto;display:flex;min-height:0}
 #map{flex:1 1 auto;min-height:320px;background:#e9edf2}
 aside{flex:0 0 320px;border-left:1px solid var(--line);background:var(--card);display:flex;flex-direction:column;min-height:0}
@@ -452,6 +461,12 @@ footer a{display:inline-block;padding:4px 2px;line-height:16px}
     <span>งานในบริษัทเหล่านี้ <b>__N_JOBS__</b></span>
     <span>งานที่ปักหมุด <b id="pinStat">0</b></span>
   </div>
+  <div class="viewbar" id="viewbar" role="group" aria-label="มุมมองหมุดบนแผนที่">
+    <button type="button" class="viewbtn" data-view="all" aria-pressed="false">ทั้งหมด (__N_ONMAP__)</button>
+    <button type="button" class="viewbtn" data-view="pinned" aria-pressed="false">ปักหมุด (<span id="viewPinCount">0</span>)</button>
+    <button type="button" class="viewbtn" data-view="mix" aria-pressed="true">ผสม (ไฮไลต์ที่ปัก)</button>
+  </div>
+  <div class="warn" id="viewempty" hidden>ยังไม่มีงานที่ปักหมุด — ปักจากหน้า dashboard</div>
   <div class="legend">
     <span><span class="dot exact"></span>ตรงชื่อบริษัท + อยู่กรุงเทพ (__N_EXACT__)</span>
     <span><span class="dot approx"></span>ประมาณ — ชื่อไม่ตรงเป๊ะ (__N_APPROX__)</span>
@@ -556,6 +571,37 @@ window.MAPDATA = __MAPDATA__;
   var pins = fromQuery === null ? readStored() : fromQuery;
   if (fromQuery !== null) writeStored(pins);  /* ให้ dashboard เห็นชุดเดียวกัน */
 
+  /* ---------- มุมมอง 3 โหมด: all (ทั้งหมด) · pinned (เฉพาะที่ปัก) · mix (ทั้งหมด + ไฮไลต์ที่ปัก) ----------
+     อ่าน: ?view=all|pinned|mix (ทับ) · ไม่งั้น localStorage['jobboard.mapview'] · ไม่มี/ไม่ถูกต้อง → mix */
+  var VIEW_KEY = 'jobboard.mapview';
+  var VIEWS = ['all', 'pinned', 'mix'];
+  var DEFAULT_VIEW = 'mix';
+  var state = { map: null };
+
+  function readView() {
+    try {
+      var raw = String(localStorage.getItem(VIEW_KEY) || '');
+      return VIEWS.indexOf(raw) >= 0 ? raw : null;
+    } catch (e) { return null; }
+  }
+
+  function writeView(value) {
+    try { localStorage.setItem(VIEW_KEY, value); } catch (e) { /* localStorage ปิด (file:// ที่บล็อก) */ }
+  }
+
+  function queryView() {
+    try {
+      var params = new URLSearchParams(String(window.location.search || ''));
+      if (!params.has('view')) return null;
+      var value = String(params.get('view') || '').trim().toLowerCase();
+      return VIEWS.indexOf(value) >= 0 ? value : DEFAULT_VIEW;
+    } catch (e) { return null; }
+  }
+
+  var fromQueryView = queryView();
+  var view = fromQueryView || readView() || DEFAULT_VIEW;
+  writeView(view);
+
   function isPinned(id) {
     return pins.indexOf(String(id === undefined || id === null ? '' : id)) >= 0;
   }
@@ -569,9 +615,32 @@ window.MAPDATA = __MAPDATA__;
   function syncUrl() {
     try {
       if (!window.history || typeof history.replaceState !== 'function') return;
-      var qs = pins.length ? '?pins=' + pins.map(encodeURIComponent).join(',') : '';
+      var parts = [];
+      if (pins.length) parts.push('pins=' + pins.map(encodeURIComponent).join(','));
+      if (view !== DEFAULT_VIEW) parts.push('view=' + encodeURIComponent(view));
+      var qs = parts.length ? '?' + parts.join('&') : '';
       history.replaceState(null, '', window.location.pathname + qs + (window.location.hash || ''));
     } catch (e) { /* file:// หรือ sandbox ปิดประวัติ — ไม่เป็นไร */ }
+  }
+
+  /* จำนวนบริษัทบนแผนที่ที่มีงานถูกปัก (= หมุดที่เห็นในโหมด pinned) */
+  function pinnedCompanyCount() {
+    var n = 0;
+    (DATA.companies || []).forEach(function (company) { if (countPinned(company) > 0) n++; });
+    return n;
+  }
+
+  function updateViewUI() {
+    var buttons = document.querySelectorAll('#viewbar button.viewbtn');
+    var n = pinnedCompanyCount();
+    var badge = document.getElementById('viewPinCount');
+    if (badge) badge.textContent = String(n);
+    for (var i = 0; i < buttons.length; i++) {
+      var on = buttons[i].getAttribute('data-view') === view;
+      buttons[i].setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+    var empty = document.getElementById('viewempty');
+    if (empty) empty.hidden = !(view === 'pinned' && n === 0);
   }
 
   function pinItem(id) {
@@ -624,34 +693,68 @@ window.MAPDATA = __MAPDATA__;
 
   function paintCompany(rec) {
     var on = countPinned(rec.company);
+    var hl = on > 0 && view !== 'all';   /* โหมด "ทั้งหมด" ไม่ไฮไลต์ (กติกา Tz) */
     var total = (rec.company.jobs || []).length;
     if (rec.kind === 'adv') {
-      rec.wrap.className = 'pinwrap' + (on > 0 ? ' pinned' : '');
-      rec.wrap.setAttribute('data-pinned', on > 0 ? 'true' : 'false');
+      rec.wrap.className = 'pinwrap' + (hl ? ' pinned' : '');
+      rec.wrap.setAttribute('data-pinned', hl ? 'true' : 'false');
       rec.wrap.setAttribute('data-pinned-count', String(on));
       rec.wrap.setAttribute('data-company', rec.company.company);
       rec.pin.setAttribute('aria-label', rec.company.company
         + (on > 0 ? ' · ปักหมุด ' + on + ' งาน' : ' · ' + total + ' งาน'));
-      rec.badge.textContent = on > 0 ? '📌 ' + on : '';
-      if (rec.marker) { try { rec.marker.zIndex = on > 0 ? 9000 : 1; } catch (e) { /* ไม่เป็นไร */ } }
+      rec.badge.textContent = hl ? '📌 ' + on : '';
+      if (rec.marker) { try { rec.marker.zIndex = hl ? 9000 : 1; } catch (e) { /* ไม่เป็นไร */ } }
       return;
     }
     if (!rec.marker) return;
     try {
       rec.marker.setIcon({
         path: google.maps.SymbolPath.CIRCLE,
-        scale: on > 0 ? 12 : 8,
-        fillColor: on > 0 ? PIN_COLOR : (rec.exact ? EXACT_COLOR : APPROX_COLOR),
+        scale: hl ? 12 : 8,
+        fillColor: hl ? PIN_COLOR : (rec.exact ? EXACT_COLOR : APPROX_COLOR),
         fillOpacity: 1,
         strokeColor: '#ffffff',
-        strokeWeight: on > 0 ? 3 : 2
+        strokeWeight: hl ? 3 : 2
       });
-      rec.marker.setZIndex(on > 0 ? 9000 : 1);
+      rec.marker.setZIndex(hl ? 9000 : 1);
       rec.marker.setTitle(rec.company.company + (on > 0 ? ' · ปักหมุด ' + on + ' งาน' : ''));
     } catch (e) { /* ไม่เป็นไร */ }
   }
 
-  function paintAll() { records.forEach(paintCompany); }
+  /* ซ่อน/แสดงหมุดตามโหมด · fit bounds ตามหมุดที่มองเห็น (ไม่มีเลย → กลับไป center กรุงเทพ) */
+  function applyView(refit) {
+    var onlyPinned = view === 'pinned';
+    records.forEach(function (rec) {
+      var show = !onlyPinned || countPinned(rec.company) > 0;
+      rec.visible = show;
+      if (state.map) {
+        try {
+          if (rec.kind === 'adv') rec.marker.map = show ? state.map : null;
+          else rec.marker.setMap(show ? state.map : null);
+        } catch (e) { /* ไม่เป็นไร */ }
+      }
+      paintCompany(rec);
+    });
+    if (refit) fitVisible();
+  }
+
+  function fitVisible() {
+    if (!state.map || !window.google || !google.maps) return;
+    var shown = records.filter(function (rec) { return rec.visible; });
+    if (!shown.length) {
+      state.map.setCenter(DATA.center || { lat: 13.7563, lng: 100.5018 });
+      state.map.setZoom(DATA.zoom || 11);
+      return;
+    }
+    if (shown.length === 1) {
+      state.map.setCenter({ lat: shown[0].company.lat, lng: shown[0].company.lng });
+      state.map.setZoom(14);
+      return;
+    }
+    var bounds = new google.maps.LatLngBounds();
+    shown.forEach(function (rec) { bounds.extend({ lat: rec.company.lat, lng: rec.company.lng }); });
+    state.map.fitBounds(bounds, 40);
+  }
 
   function removePin(id) {
     var key = String(id === undefined || id === null ? '' : id);
@@ -659,7 +762,8 @@ window.MAPDATA = __MAPDATA__;
     writeStored(pins);
     syncUrl();
     renderPanel();
-    paintAll();
+    updateViewUI();
+    applyView(true);
   }
 
   function infoNode(company) {
@@ -712,6 +816,7 @@ window.MAPDATA = __MAPDATA__;
       notice('สร้างแผนที่ไม่ได้: ' + (err && err.message ? err.message : String(err)));
       return;
     }
+    state.map = map;
     var info = new google.maps.InfoWindow({ maxWidth: 340 });
     var Advanced = google.maps.marker && google.maps.marker.AdvancedMarkerElement
       ? google.maps.marker.AdvancedMarkerElement : null;
@@ -756,6 +861,7 @@ window.MAPDATA = __MAPDATA__;
       paintCompany(rec);
     });
     READY = true;
+    applyView(fromQueryView !== null);   /* โหมดเริ่มต้นคงเดิม (center กรุงเทพ) เว้นแต่ URL ระบุมา */
   };
 
   var pinList = document.getElementById('pinlist');
@@ -766,7 +872,23 @@ window.MAPDATA = __MAPDATA__;
       removePin(btn.dataset.jobId);
     });
   }
+
+  var viewbar = document.getElementById('viewbar');
+  if (viewbar) {
+    viewbar.addEventListener('click', function (ev) {
+      var btn = ev.target.closest ? ev.target.closest('button.viewbtn') : null;
+      if (!btn) return;
+      var next = btn.getAttribute('data-view');
+      if (VIEWS.indexOf(next) < 0) return;
+      view = next;
+      writeView(view);
+      syncUrl();
+      updateViewUI();
+      applyView(true);
+    });
+  }
   renderPanel();
+  updateViewUI();
 
   window.addEventListener('load', function () {
     setTimeout(function () {
