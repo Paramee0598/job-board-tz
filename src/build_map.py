@@ -19,6 +19,16 @@
   · คีย์อ่านตอน build แล้วฝังใน dist\\map.html (Maps JS ต้องมีคีย์ฝั่ง client) — ไม่เขียนลง src\\/config\\/data\\
     ⚠ dist\\map.html อยู่บน GitHub Pages แบบสาธารณะ → ต้องจำกัดคีย์ด้วย HTTP referrer
   · ไม่มี path absolute ในไฟล์นี้: ROOT มาจาก __file__
+  · พิกัดที่แก้เอง: อ่าน data\\company_overrides.json ถ้ามี ({"<ชื่อบริษัท>":{"lat":..,"lng":..}}) แล้วใช้แทนพิกัดจาก geocode
+    ไฟล์นี้สร้างจากปุ่ม "ส่งออกพิกัดที่แก้ (N)" บนหน้า map — ไม่มีไฟล์/อ่านไม่ได้ = ใช้พิกัด geocode ตามเดิม ไม่พัง
+  · หมุดเล็กลง 12px (เดิม 28px) แต่พื้นที่กด 28px (.pinwrap padding) · ลากหมุดแก้พิกัดได้
+    (AdvancedMarkerElement gmpDraggable + event gmp-dragend → localStorage['jobboard.pinpos'])
+  · ปุ่ม "ค้นหาใน Google" แยกจากปุ่มอื่น — Places API (New) REST places:searchText ฝั่งเบราว์เซอร์
+    (PlacesService แบบ legacy ใช้กับคีย์ชุดนี้ไม่ได้: LegacyApiNotActivatedMapError)
+    fetch ล้มเหลว/ถูกบล็อก → ถอยไป google.maps.importLibrary("places") + Place.searchByText
+    สำหรับบริษัทที่ไม่มีพิกัดและบริษัทที่พิกัดหยาบ — ผลลัพธ์ติดป้าย "Google · ค้นหาใหม่"
+    + จังหวัด (ในไทย) หรือชื่อประเทศ (นอกไทย) ไม่ปนกับพิกัดที่ geocode ตอน build
+    ไม่พบผลลัพธ์จริง → "Google ไม่พบผลลัพธ์" และไม่เดาพิกัด
 
 ใช้: python src\\build_map.py            (ไม่ต้องมีคีย์ก็ได้ — ได้หน้าแบนเนอร์)
      python src\\build_map.py --out dist\\_maptest.html   (เขียนที่อื่นเพื่อทดสอบ ไม่ทับของจริง)
@@ -47,6 +57,7 @@ COMPANIES_PATH = DATA / "companies.json"
 JOBS_PATH = DATA / "jobs.json"
 FILTERS_PATH = CONFIG / "filters.json"
 OUT_PATH = DIST / "map.html"
+OVERRIDES_PATH = DATA / "company_overrides.json"
 
 CENTER = (13.7563, 100.5018)
 ZOOM = 11
@@ -71,6 +82,42 @@ def load_company_entries() -> tuple[dict, list]:
         if isinstance(row, dict) and str(row.get("company") or "").strip():
             entries.append(row)
     return (raw if isinstance(raw, dict) else {}), entries
+
+
+def normalize_positions(raw) -> dict:
+    """ไฟล์พิกัดที่แก้เอง → dict ชื่อบริษัท → {lat,lng} (ทนรูปแบบห่อ companies/overrides/positions/pins)"""
+    rows = raw
+    if isinstance(raw, dict):
+        for key in ("companies", "overrides", "positions", "pins"):
+            if isinstance(raw.get(key), dict):
+                rows = raw[key]
+                break
+    if not isinstance(rows, dict):
+        return {}
+    out = {}
+    for name, pos in rows.items():
+        company = str(name or "").strip()
+        if not company or not isinstance(pos, dict):
+            continue
+        try:
+            lat = float(pos.get("lat"))
+            lng = float(pos.get("lng"))
+        except (TypeError, ValueError):
+            continue
+        if not (-90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0):
+            continue
+        out[company] = {"lat": lat, "lng": lng}
+    return out
+
+
+def load_overrides() -> tuple[dict, bool]:
+    """พิกัดที่แก้เองจาก data\\company_overrides.json — ไม่มีไฟล์/อ่านไม่ได้ = {} (ไม่พัง)"""
+    if not OVERRIDES_PATH.is_file():
+        return {}, False
+    raw = load_json(OVERRIDES_PATH, None)
+    if raw is None:
+        return {}, True
+    return normalize_positions(raw), True
 
 
 def job_index() -> dict:
@@ -154,22 +201,35 @@ def off_reason(entry: dict) -> str:
     return "อยู่นอกกรุงเทพ" + (f" · {province}" if province else "")
 
 
-def build_payload(entries: list, index: dict, cfg: dict) -> dict:
+def build_payload(entries: list, index: dict, cfg: dict, overrides: dict | None = None) -> dict:
+    overrides = overrides or {}
     on_map, off_map = [], []
+    applied = 0
     for entry in entries:
         company = str(entry.get("company") or "").strip()
+        lat = round(float(entry["lat"]), 7) if has_coords(entry) else None
+        lng = round(float(entry["lng"]), 7) if has_coords(entry) else None
+        pos_source = "geocode"
+        override = overrides.get(company)
+        if override:
+            lat = round(override["lat"], 7)
+            lng = round(override["lng"], 7)
+            pos_source = "override"
+            applied += 1
         item = {
             "company": company,
-            "lat": round(float(entry["lat"]), 7) if has_coords(entry) else None,
-            "lng": round(float(entry["lng"]), 7) if has_coords(entry) else None,
+            "lat": lat,
+            "lng": lng,
             "formatted_address": str(entry.get("formatted_address") or ""),
             "province": str(entry.get("province") or ""),
             "accuracy": str(entry.get("accuracy") or "unknown"),
             "status": str(entry.get("status") or "unknown"),
             "found_name": str(entry.get("found_name") or ""),
+            "pos_source": pos_source,
             "jobs": company_jobs(entry, index, cfg),
         }
-        if has_coords(entry) and entry.get("in_bangkok") is True:
+        pinned_by_user = pos_source == "override" and lat is not None and lng is not None
+        if pinned_by_user or (has_coords(entry) and entry.get("in_bangkok") is True):
             on_map.append(item)
         else:
             item["reason"] = off_reason(entry)
@@ -186,6 +246,12 @@ def build_payload(entries: list, index: dict, cfg: dict) -> dict:
         "companies": on_map,
         "off_map": off_map,
         "jobs": job_lookup(entries, index, cfg),
+        "overrides": {
+            "read": len(overrides),
+            "applied": applied,
+            "unmatched": sum(1 for name in overrides
+                             if name not in {str(e.get("company") or "").strip() for e in entries}),
+        },
         "counts": {
             "total": len(entries),
             "on_map": len(on_map),
@@ -234,6 +300,7 @@ def main(argv=None) -> int:
     built_at = datetime.now().isoformat(timespec="seconds")
     key, key_source = geo.find_key()
     raw, entries = load_company_entries()
+    overrides, overrides_file = load_overrides()
     cfg = load_json(FILTERS_PATH, {}) or {}
 
     if not key or not entries:
@@ -242,7 +309,7 @@ def main(argv=None) -> int:
         mode = "banner_no_key" if not key else "banner_no_data"
         payload = None
     else:
-        payload = build_payload(entries, job_index(), cfg)
+        payload = build_payload(entries, job_index(), cfg, overrides)
         page = render_map(payload, key, built_at, raw)
         mode = "map"
 
@@ -263,6 +330,12 @@ def main(argv=None) -> int:
         "companies_read": len(entries),
         "companies_json_generated_at": (raw or {}).get("generated_at"),
         "built_at": built_at,
+    }
+    report["overrides"] = {
+        "file": (OVERRIDES_PATH.relative_to(ROOT).as_posix() if overrides_file else None),
+        "read": len(overrides),
+        "applied": (payload or {}).get("overrides", {}).get("applied", 0),
+        "unmatched": (payload or {}).get("overrides", {}).get("unmatched", 0),
     }
     if payload is not None:
         report["counts"] = payload["counts"]
@@ -302,14 +375,45 @@ a{color:var(--accent);display:inline-block;padding:4px 2px;line-height:16px}
 """
 
 
+def find_button(company: str) -> str:
+    """ปุ่ม "ค้นหาใน Google" (แยกจากปุ่มอื่น) — เรียก Places API (New) ฝั่งเบราว์เซอร์"""
+    co = html_escape(company)
+    return ('<button type="button" class="findbtn" data-company="' + co
+            + '" data-query="' + co + '">ค้นหาใน Google</button>')
+
+
 def off_map_rows(payload: dict) -> str:
-    """แผงข้าง: บริษัทที่ไม่ขึ้นแผนที่ + เหตุผล (เรนเดอร์ฝั่ง Python — ไม่ต้องพึ่ง JS)."""
+    """แผงข้าง: บริษัทที่ไม่ขึ้นแผนที่ + เหตุผล + ปุ่มค้นหา Google (เรนเดอร์ฝั่ง Python)."""
     rows = []
     for item in payload["off_map"]:
+        co = html_escape(item["company"])
         rows.append(
-            '<li><span class="co">' + html_escape(item["company"]) + '</span>'
+            '<li data-company="' + co + '">'
+            '<span class="co">' + co + '</span>'
             '<span class="why">' + html_escape(item["reason"]) + '</span>'
-            '<span class="nj">' + str(len(item["jobs"])) + ' งาน</span></li>'
+            '<span class="nj">' + str(len(item["jobs"])) + ' งาน · ความแม่น '
+            + html_escape(item.get("accuracy") or "unknown") + '</span>'
+            '<div class="rowbtns">' + find_button(item["company"])
+            + '<span class="findres" hidden></span></div></li>'
+        )
+    return "".join(rows)
+
+
+def approx_rows(payload: dict) -> str:
+    """แถวบริษัทที่พิกัดหยาบ (accuracy=approx) บนแผนที่ — แต่ละแถวมีปุ่มค้นหา Google ของตัวเอง"""
+    rows = []
+    for item in payload["companies"]:
+        if str(item.get("accuracy") or "") != "approx":
+            continue
+        if item.get("pos_source") == "override":
+            continue
+        co = html_escape(item["company"])
+        rows.append(
+            '<li data-company="' + co + '">'
+            '<span class="co">' + co + '</span>'
+            '<span class="why">' + html_escape(item.get("formatted_address") or "") + '</span>'
+            '<div class="rowbtns">' + find_button(item["company"])
+            + '<span class="findres" hidden></span></div></li>'
         )
     return "".join(rows)
 
@@ -326,10 +430,17 @@ def render_map(payload: dict, key: str, built_at: str, raw: dict) -> str:
                 'บริษัทที่ยังไม่มีพิกัดรออยู่ในแผงด้านขวา (ลองรัน <code>'
                 + html_escape(BANNER_COMMAND) + '</code>)</div>')
     source_at = html_escape(str((raw or {}).get("generated_at") or "-"))
+    approx_html = approx_rows(payload)
+    approx_n = approx_html.count('class="findbtn"')
+    applied = int(payload.get("overrides", {}).get("applied", 0) or 0)
+    override_note = ('' if not applied else
+                     '<div class="warn" id="ovbox">ใช้พิกัดที่แก้เองจาก data\\company_overrides.json '
+                     + str(applied) + ' บริษัท (ทับพิกัดจาก geocode)</div>')
     page = MAP_TEMPLATE
     replacements = {
         "__KEY__": html_escape(urllib.parse.quote(key, safe="")),
         "__MAPDATA__": js_json(payload),
+        "__PLACES_KEY__": js_json(key),
         "__BUILT__": html_escape(built_at),
         "__SOURCE_AT__": source_at,
         "__N_TOTAL__": str(counts["total"]),
@@ -339,6 +450,9 @@ def render_map(payload: dict, key: str, built_at: str, raw: dict) -> str:
         "__N_APPROX__": str(accuracy.get("approx", 0)),
         "__N_JOBS__": str(counts["jobs_total"]),
         "__OFFMAP_ROWS__": off_map_rows(payload),
+        "__APPROX_ROWS__": approx_html,
+        "__N_APPROX_SEARCH__": str(approx_n),
+        "__OVERRIDE_NOTE__": override_note,
         "__WARN_BLOCK__": warn,
     }
     for token, value in replacements.items():
@@ -354,7 +468,8 @@ MAP_TEMPLATE = r"""<!DOCTYPE html>
 <title>บริษัทในประกาศงาน — แผนที่กรุงเทพ</title>
 <style>
 :root{--bg:#f7f8fa;--card:#fff;--ink:#1c2128;--muted:#6b7280;--line:#e3e6ea;--accent:#1f6feb;
- --exact:#1f6feb;--approx:#b45309;--pin:#d1242f;--chip:#eef1f5;--warn:#fff7ed;--warnline:#fed7aa;--warnink:#9a3412}
+ --exact:#1f6feb;--approx:#b45309;--pin:#d1242f;--chip:#eef1f5;--warn:#fff7ed;--warnline:#fed7aa;--warnink:#9a3412;
+ --found:#1a7f37;--fixed:#8250df}
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;height:100%}
 body{background:var(--bg);color:var(--ink);font-size:14px;line-height:1.45;display:flex;flex-direction:column;
@@ -374,6 +489,8 @@ a{color:var(--accent)}
  box-shadow:0 0 0 1px var(--line);margin-right:5px;vertical-align:-1px}
 .dot.exact{background:var(--exact)}
 .dot.approx{background:var(--approx)}
+.dot.found{background:var(--found)}
+.dot.fixed{background:var(--fixed)}
 .warn{margin-top:8px;padding:7px 9px;background:var(--warn);border:1px solid var(--warnline);
  color:var(--warnink);font-size:12.5px;border-radius:6px}
 .warn code{background:#fff;border:1px solid var(--warnline);border-radius:4px;padding:0 4px}
@@ -399,15 +516,20 @@ aside .hint{margin:0;padding:8px 12px;font-size:12px;color:var(--muted);border-b
 #offlist .empty{padding:14px 12px;color:var(--muted);font-size:12.5px}
 #maperr{margin:8px 12px;padding:8px 10px;background:var(--warn);border:1px solid var(--warnline);
  color:var(--warnink);font-size:12.5px;border-radius:6px}
-.pin{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;
- color:#fff;font-size:12px;font-weight:600;border:2px solid #fff;cursor:pointer;
+/* จุดหมุด 12px (เดิม 28px) — พื้นที่กด 28px มาจาก padding ของ .pinwrap โดยไม่ทำให้จุดดูใหญ่ */
+.pin{position:relative;width:12px;height:12px;border-radius:50%;display:block;
+ color:#fff;font-size:0;font-weight:600;border:2px solid #fff;cursor:pointer;
  box-shadow:0 1px 3px rgba(0,0,0,.35)}
 .pin.exact{background:var(--exact)}
 .pin.approx{background:var(--approx)}
-.pinwrap{position:relative;display:inline-flex;align-items:center;justify-content:center}
-.pinwrap.pinned .pin{background:var(--pin);width:34px;height:34px;font-size:13.5px;border-width:3px;
- box-shadow:0 0 0 3px #fff,0 2px 7px rgba(0,0,0,.45)}
-.pinbadge{display:none;position:absolute;top:-9px;right:-12px;background:#fff;border:1px solid var(--pin);
+.pin.search{background:var(--found)}
+.pin.override{background:var(--fixed)}
+/* AdvancedMarkerElement ยึดจุดที่กลางขอบล่างของ content — เลื่อน content ลงครึ่งกล่อง (14px)
+   ให้ "จุด" อยู่ที่พิกัดจริง ไม่ใช่มุมล่าง (ไม่มี anchorPoint ใน API รุ่นนี้) */
+.pinwrap{position:relative;display:inline-flex;align-items:center;justify-content:center;padding:8px;cursor:pointer;
+ transform:translateY(14px)}
+.pinwrap.pinned .pin{box-shadow:0 0 0 2px #fff,0 0 0 4px var(--pin),0 2px 7px rgba(0,0,0,.45)}
+.pinbadge{display:none;position:absolute;top:-2px;right:-6px;background:#fff;border:1px solid var(--pin);
  color:var(--pin);font-size:10.5px;font-weight:700;border-radius:999px;padding:0 4px;line-height:15px;white-space:nowrap}
 .pinwrap.pinned .pinbadge{display:block}
 .iw-jobs li.iw-pinned{background:#fff5f5;font-weight:600}
@@ -437,6 +559,37 @@ aside .hint{margin:0;padding:8px 12px;font-size:12px;color:var(--muted);border-b
 .iw-jobs a:hover{text-decoration:underline}
 .iw-score{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums;flex:0 0 auto}
 .iw-empty{color:var(--muted);font-size:12px}
+/* ปุ่ม "ค้นหาใน Google" — แยกจากปุ่มอื่น เห็นชัดทุกแถว (hit area >= 24px) */
+.findbtn{font:inherit;font-size:11.5px;padding:2px 8px;min-height:24px;border:1px solid var(--line);background:#fff;
+ color:var(--accent);border-radius:6px;cursor:pointer;line-height:16px}
+.findbtn:hover{border-color:var(--accent);background:#f2f7ff}
+.findbtn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+#offlist .rowbtns,#approxlist .rowbtns{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:3px}
+.findres{font-size:11.5px;color:var(--found)}
+.findres[hidden]{display:none}
+.approxbox{flex:0 1 auto;max-height:30%;min-height:0;display:flex;flex-direction:column;
+ border-bottom:1px solid var(--line);overflow:hidden}
+.approxbox[open]{max-height:42%}
+.approxbox summary{cursor:pointer;font-size:13px;font-weight:600;padding:9px 12px;list-style:none}
+.approxbox summary::-webkit-details-marker{display:none}
+.approxbox summary::marker{content:''}
+.approxbox summary:hover{color:var(--accent)}
+#approxlist{list-style:none;margin:0;padding:0;overflow:auto;flex:1 1 auto}
+#approxlist li{display:flex;flex-direction:column;gap:2px;padding:6px 12px;border-bottom:1px solid var(--line)}
+#approxlist .co{font-weight:600;font-size:12.5px}
+#approxlist .why{font-size:11.5px;color:var(--muted)}
+.posbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px}
+.posbtn:disabled{opacity:.55;cursor:not-allowed}
+.posnote{font-size:11.5px;color:var(--muted)}
+.exportbox{margin-top:6px;border:1px solid var(--line);border-radius:8px;padding:8px;background:#fbfcfd}
+#exporttext{width:100%;height:104px;font-family:ui-monospace,Consolas,monospace;font-size:11.5px;
+ border:1px solid var(--line);border-radius:6px;padding:6px;resize:vertical;background:#fff;color:var(--ink)}
+.exportact{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap}
+.iw-acc.found{background:#dcfce7;color:#166534}
+.iw-acc.fixed{background:#ede9fe;color:#5b21b6}
+.iw-coords{font-size:11.5px;color:var(--muted);margin:0 0 6px;font-variant-numeric:tabular-nums}
+.iw-find{margin:0 0 6px}
+.chk{display:inline-flex;align-items:center;gap:4px;margin-left:6px;font-size:12px;color:var(--ink);cursor:pointer}
 footer{flex:0 0 auto;border-top:1px solid var(--line);background:var(--card);padding:6px 16px;
  font-size:12px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap;align-items:center}
 footer a{display:inline-block;padding:4px 2px;line-height:16px}
@@ -456,8 +609,8 @@ footer a{display:inline-block;padding:4px 2px;line-height:16px}
   </div>
   <div class="stats">
     <span>บริษัททั้งหมด <b>__N_TOTAL__</b></span>
-    <span>บนแผนที่ <b>__N_ONMAP__</b></span>
-    <span>ไม่พบบนแผนที่ <b>__N_OFFMAP__</b></span>
+    <span>บนแผนที่ <b id="statOnmap">__N_ONMAP__</b></span>
+    <span>ไม่พบบนแผนที่ <b id="statOffmap">__N_OFFMAP__</b></span>
     <span>งานในบริษัทเหล่านี้ <b>__N_JOBS__</b></span>
     <span>งานที่ปักหมุด <b id="pinStat">0</b></span>
   </div>
@@ -466,13 +619,27 @@ footer a{display:inline-block;padding:4px 2px;line-height:16px}
     <button type="button" class="viewbtn" data-view="pinned" aria-pressed="false">ปักหมุด (<span id="viewPinCount">0</span>)</button>
     <button type="button" class="viewbtn" data-view="mix" aria-pressed="true">ผสม (ไฮไลต์ที่ปัก)</button>
   </div>
+  <div class="posbar">
+    <button type="button" class="viewbtn posbtn" id="exportbtn" disabled>ส่งออกพิกัดที่แก้ (0)</button>
+    <span class="posnote" id="exportnote">ยังไม่มีพิกัดที่แก้ — ลากหมุดหรือกด "ค้นหาใน Google" ก่อน</span>
+  </div>
+  <div class="exportbox" id="exportbox" hidden>
+    <textarea id="exporttext" readonly spellcheck="false" aria-label="JSON พิกัดที่แก้ (company_overrides.json)"></textarea>
+    <div class="exportact">
+      <button type="button" class="viewbtn" id="exportcopy">คัดลอก</button>
+      <button type="button" class="viewbtn" id="exportdl">ดาวน์โหลด company_overrides.json</button>
+    </div>
+  </div>
   <div class="warn" id="viewempty" hidden>ยังไม่มีงานที่ปักหมุด — ปักจากหน้า dashboard</div>
   <div class="legend">
     <span><span class="dot exact"></span>ตรงชื่อบริษัท + อยู่กรุงเทพ (__N_EXACT__)</span>
     <span><span class="dot approx"></span>ประมาณ — ชื่อไม่ตรงเป๊ะ (__N_APPROX__)</span>
-    <span>เฉพาะบริษัทที่อยู่ในกรุงเทพเท่านั้น · ไม่มีวงรัศมีพื้นที่</span>
+    <span><span class="dot fixed"></span>ตำแหน่งที่แก้เอง (ลากหมุด/company_overrides.json)</span>
+    <span><span class="dot found"></span>Google · ค้นหาใหม่</span>
+    <span>เฉพาะบริษัทที่อยู่ในกรุงเทพเท่านั้น · ไม่มีวงรัศมีพื้นที่ · ลากหมุดเพื่อแก้พิกัดได้</span>
   </div>
   __WARN_BLOCK__
+  __OVERRIDE_NOTE__
 </header>
 <main>
   <div id="map"></div>
@@ -482,9 +649,15 @@ footer a{display:inline-block;padding:4px 2px;line-height:16px}
       <p class="hint">ปักหมุดจาก dashboard ด้วยปุ่ม 📌 — หมุดของบริษัทที่มีงานถูกปักจะเด่นขึ้น (ไม่เพิ่มหมุดใหม่)</p>
       <ul id="pinlist"></ul>
     </div>
+    <details class="approxbox" id="approxbox">
+      <summary>พิกัดหยาบ — ค้นหาใหม่ (<span id="approxCount">__N_APPROX_SEARCH__</span>)</summary>
+      <p class="hint">Google จับคู่ชื่อบริษัทไม่ตรงเป๊ะ · กด "ค้นหาใน Google" เพื่อปักพิกัดใหม่ (ติดป้าย Google · ค้นหาใหม่ + จังหวัด/ประเทศ)</p>
+      <ul id="approxlist">__APPROX_ROWS__</ul>
+    </details>
     <div class="offbox">
       <h2>ไม่ปรากฏบนแผนที่ <span>__N_OFFMAP__ บริษัท</span></h2>
-      <p class="hint">หมุดขึ้นเฉพาะบริษัทที่ Google ยืนยันว่าอยู่ในกรุงเทพ — ที่เหลือแสดงที่นี่พร้อมเหตุผล</p>
+      <p class="hint">หมุดขึ้นเฉพาะบริษัทที่ Google ยืนยันว่าอยู่ในกรุงเทพ — ที่เหลือแสดงที่นี่พร้อมเหตุผล · กด "ค้นหาใน Google" เพื่อหาพิกัดเอง
+        <label class="chk"><input type="checkbox" id="searchbkk"> เติม «กรุงเทพ» ในคำค้น</label></p>
       <div id="maperr" hidden></div>
       <ul id="offlist">__OFFMAP_ROWS__</ul>
     </div>
@@ -532,8 +705,131 @@ window.MAPDATA = __MAPDATA__;
      อ่าน: localStorage['jobboard.pins'] (ค่าเริ่มต้น) · ?pins=id1,id2 (ถ้ามี = ทับ)
      ลบในแผง = ออกจาก localStorage + URL · localStorage ใช้ไม่ได้ = อยู่ในหน่วยความจำ */
   var PINS_KEY = 'jobboard.pins';
+  var POS_KEY = 'jobboard.pinpos';
   var JOBS = DATA.jobs || {};
   var records = [];
+  var recsByCompany = {};
+  var AdvancedMarker = null;
+  var openRec = null;
+
+  /* ---------- พิกัดที่แก้เอง: localStorage['jobboard.pinpos'] ----------
+     รูปแบบ {"<ชื่อบริษัท>":{"lat":..,"lng":..}} — รูปแบบเดียวกับ data\company_overrides.json
+     เก็บจาก (ก) ลากหมุด (by="drag") และ (ข) ผลค้นหา Google (by="search", label = จังหวัด/ประเทศ)
+     ปุ่ม "ส่งออกพิกัดที่แก้" พิมพ์เฉพาะ lat/lng ให้เอาไปวางเป็น data\company_overrides.json ได้ตรง ๆ */
+  function readPositions() {
+    var out = {};
+    try {
+      var raw = localStorage.getItem(POS_KEY);
+      var obj = raw ? JSON.parse(raw) : {};
+      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return out;
+      Object.keys(obj).forEach(function (name) {
+        var pos = obj[name];
+        if (!pos || typeof pos !== 'object') return;
+        var lat = Number(pos.lat), lng = Number(pos.lng);
+        if (!isFinite(lat) || !isFinite(lng)) return;
+        if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
+        out[name] = {
+          lat: lat,
+          lng: lng,
+          label: String(pos.label || ''),
+          by: String(pos.by || 'drag')
+        };
+      });
+    } catch (e) { return {}; }
+    return out;
+  }
+
+  function writePositions() {
+    try { localStorage.setItem(POS_KEY, JSON.stringify(posStore)); } catch (e) { /* localStorage ปิด (file:// ที่บล็อก) */ }
+  }
+
+  var posStore = readPositions();
+
+  function savePosition(company, lat, lng, label, by) {
+    var key = String(company === undefined || company === null ? '' : company).trim();
+    var latN = Number(lat), lngN = Number(lng);
+    if (!key || !isFinite(latN) || !isFinite(lngN)) return;
+    if (latN < -90 || latN > 90 || lngN < -180 || lngN > 180) return;
+    posStore[key] = {
+      lat: Math.round(latN * 1e7) / 1e7,
+      lng: Math.round(lngN * 1e7) / 1e7,
+      label: String(label || ''),
+      by: String(by || 'drag')
+    };
+    writePositions();
+    updateExportUI();
+  }
+
+  function positionCount() { return Object.keys(posStore).length; }
+
+  function exportObject() {
+    var out = {};
+    Object.keys(posStore).sort().forEach(function (name) {
+      out[name] = { lat: posStore[name].lat, lng: posStore[name].lng };
+    });
+    return out;
+  }
+
+  function updateExportUI() {
+    var n = positionCount();
+    var btn = document.getElementById('exportbtn');
+    var box = document.getElementById('exportbox');
+    var text = document.getElementById('exporttext');
+    var note = document.getElementById('exportnote');
+    if (btn) {
+      btn.textContent = 'ส่งออกพิกัดที่แก้ (' + n + ')';
+      btn.disabled = n === 0;
+      btn.setAttribute('aria-disabled', n === 0 ? 'true' : 'false');
+    }
+    if (note) {
+      note.textContent = n === 0
+        ? 'ยังไม่มีพิกัดที่แก้ — ลากหมุดหรือกด "ค้นหาใน Google" ก่อน'
+        : 'มี ' + n + ' พิกัดที่แก้ — คัดลอก/ดาวน์โหลด JSON แล้ววางเป็น data\\company_overrides.json (build_map.py อ่านตอน build)';
+    }
+    if (text) text.value = n === 0 ? '' : JSON.stringify(exportObject(), null, 2);
+    if (box && n === 0) box.hidden = true;
+  }
+
+  function copyExport() {
+    var text = JSON.stringify(exportObject(), null, 2);
+    var box = document.getElementById('exporttext');
+    var note = document.getElementById('exportnote');
+    if (box) box.value = text;
+    var ok = false;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text);
+        ok = true;
+      }
+    } catch (e) { ok = false; }
+    if (!ok && box) {
+      try { box.select(); ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    }
+    if (note) {
+      note.textContent = ok
+        ? 'คัดลอกแล้ว — วางเป็น data\\company_overrides.json'
+        : 'คัดลอกอัตโนมัติไม่ได้ — เลือกข้อความในช่องแล้วคัดลอกเอง';
+    }
+  }
+
+  function downloadExport() {
+    var text = JSON.stringify(exportObject(), null, 2);
+    var note = document.getElementById('exportnote');
+    try {
+      var blob = new Blob([text], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'company_overrides.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      if (note) note.textContent = 'ดาวน์โหลด company_overrides.json แล้ว — วางไว้ที่ data\\company_overrides.json';
+    } catch (e) {
+      if (note) note.textContent = 'ดาวน์โหลดไม่ได้ในเบราว์เซอร์นี้ — คัดลอกจากช่องข้อความแทน';
+    }
+  }
 
   function dedupe(list) {
     var out = [];
@@ -576,7 +872,7 @@ window.MAPDATA = __MAPDATA__;
   var VIEW_KEY = 'jobboard.mapview';
   var VIEWS = ['all', 'pinned', 'mix'];
   var DEFAULT_VIEW = 'mix';
-  var state = { map: null };
+  var state = { map: null, info: null };
 
   function readView() {
     try {
@@ -643,6 +939,17 @@ window.MAPDATA = __MAPDATA__;
     if (empty) empty.hidden = !(view === 'pinned' && n === 0);
   }
 
+  /* ตัวเลขสรุปหัวเว็บจาก state จริง: หมุดที่มีพิกัด = บนแผนที่ · ที่เหลือจาก counts.total = ไม่พบ
+     (คำนวณจาก records/posStore ที่โหลดมา ไม่rebuild หน้า) */
+  function updateCountsUI() {
+    var on = records.length;
+    var off = Math.max(0, Number((DATA.counts || {}).total || 0) - on);
+    var onEl = document.getElementById('statOnmap');
+    var offEl = document.getElementById('statOffmap');
+    if (onEl) onEl.textContent = String(on);
+    if (offEl) offEl.textContent = String(off);
+  }
+
   function pinItem(id) {
     var job = JOBS[id];
     var li = el('li');
@@ -691,16 +998,53 @@ window.MAPDATA = __MAPDATA__;
     pins.forEach(function (id) { list.appendChild(pinItem(id)); });
   }
 
+  var FOUND_COLOR = '#1a7f37';
+  var FIXED_COLOR = '#8250df';
+
+  function defaultLabel(company) {
+    if (company.pos_source === 'override') return 'ตำแหน่งที่แก้เอง (company_overrides.json)';
+    if (company.accuracy === 'exact') return 'ที่อยู่จาก Google · ตรงชื่อบริษัท';
+    if (company.accuracy === 'approx') return 'ประมาณ · ชื่อที่ Google คืนไม่ตรงกับชื่อบริษัท';
+    return 'ไม่ทราบความแม่นของพิกัด';
+  }
+
+  /* ชนิดของตำแหน่ง: '' = จาก geocode ตอน build · 'override' = แก้เอง · 'search' = ผลค้นหา Google */
+  function posKindOf(rec) {
+    return rec.posKind || (rec.company.pos_source === 'override' ? 'override' : '');
+  }
+
+  function pinClass(rec) {
+    var kind = posKindOf(rec);
+    if (kind === 'search') return 'search';
+    if (kind === 'override') return 'override';
+    return rec.exact ? 'exact' : 'approx';
+  }
+
+  function pinColor(rec) {
+    var kind = posKindOf(rec);
+    if (kind === 'search') return FOUND_COLOR;
+    if (kind === 'override') return FIXED_COLOR;
+    return rec.exact ? EXACT_COLOR : APPROX_COLOR;
+  }
+
+  function currentLabel(rec) {
+    return rec.posLabel || defaultLabel(rec.company);
+  }
+
   function paintCompany(rec) {
     var on = countPinned(rec.company);
     var hl = on > 0 && view !== 'all';   /* โหมด "ทั้งหมด" ไม่ไฮไลต์ (กติกา Tz) */
     var total = (rec.company.jobs || []).length;
+    var label = currentLabel(rec);
     if (rec.kind === 'adv') {
       rec.wrap.className = 'pinwrap' + (hl ? ' pinned' : '');
       rec.wrap.setAttribute('data-pinned', hl ? 'true' : 'false');
       rec.wrap.setAttribute('data-pinned-count', String(on));
       rec.wrap.setAttribute('data-company', rec.company.company);
-      rec.pin.setAttribute('aria-label', rec.company.company
+      rec.wrap.setAttribute('data-pos', pinClass(rec));
+      rec.pin.className = 'pin ' + pinClass(rec);
+      rec.pin.title = label;
+      rec.pin.setAttribute('aria-label', rec.company.company + ' · ' + label
         + (on > 0 ? ' · ปักหมุด ' + on + ' งาน' : ' · ' + total + ' งาน'));
       rec.badge.textContent = hl ? '📌 ' + on : '';
       if (rec.marker) { try { rec.marker.zIndex = hl ? 9000 : 1; } catch (e) { /* ไม่เป็นไร */ } }
@@ -710,14 +1054,14 @@ window.MAPDATA = __MAPDATA__;
     try {
       rec.marker.setIcon({
         path: google.maps.SymbolPath.CIRCLE,
-        scale: hl ? 12 : 8,
-        fillColor: hl ? PIN_COLOR : (rec.exact ? EXACT_COLOR : APPROX_COLOR),
+        scale: hl ? 11 : 7,
+        fillColor: hl ? PIN_COLOR : pinColor(rec),
         fillOpacity: 1,
         strokeColor: '#ffffff',
         strokeWeight: hl ? 3 : 2
       });
       rec.marker.setZIndex(hl ? 9000 : 1);
-      rec.marker.setTitle(rec.company.company + (on > 0 ? ' · ปักหมุด ' + on + ' งาน' : ''));
+      rec.marker.setTitle(rec.company.company + ' · ' + label);
     } catch (e) { /* ไม่เป็นไร */ }
   }
 
@@ -735,6 +1079,7 @@ window.MAPDATA = __MAPDATA__;
       }
       paintCompany(rec);
     });
+    updateCountsUI();
     if (refit) fitVisible();
   }
 
@@ -747,12 +1092,18 @@ window.MAPDATA = __MAPDATA__;
       return;
     }
     if (shown.length === 1) {
-      state.map.setCenter({ lat: shown[0].company.lat, lng: shown[0].company.lng });
-      state.map.setZoom(14);
+      var only = shown[0].position ? shown[0].position() : null;
+      if (only) {
+        state.map.setCenter(only);
+        state.map.setZoom(14);
+      }
       return;
     }
     var bounds = new google.maps.LatLngBounds();
-    shown.forEach(function (rec) { bounds.extend({ lat: rec.company.lat, lng: rec.company.lng }); });
+    shown.forEach(function (rec) {
+      var pos = rec.position ? rec.position() : null;
+      if (pos) bounds.extend(pos);
+    });
     state.map.fitBounds(bounds, 40);
   }
 
@@ -766,13 +1117,50 @@ window.MAPDATA = __MAPDATA__;
     applyView(true);
   }
 
-  function infoNode(company) {
+  function toLatLng(value) {
+    if (!value) return null;
+    var lat = typeof value.lat === 'function' ? value.lat() : Number(value.lat);
+    var lng = typeof value.lng === 'function' ? value.lng() : Number(value.lng);
+    if (!isFinite(lat) || !isFinite(lng)) return null;
+    return { lat: lat, lng: lng };
+  }
+
+  function findCompany(name) {
+    var all = (DATA.companies || []).concat(DATA.off_map || []);
+    for (var i = 0; i < all.length; i++) {
+      if (String(all[i].company) === String(name)) return all[i];
+    }
+    return { company: String(name), lat: null, lng: null, formatted_address: '', province: '',
+             accuracy: 'unknown', status: 'unknown', jobs: [] };
+  }
+
+  function openInfo(rec) {
+    if (!state.map || !state.info) return;
+    state.info.setContent(infoNode(rec));
+    state.info.open({ map: state.map, anchor: rec.marker });
+    openRec = rec;
+  }
+
+  function infoNode(rec) {
+    var company = rec.company;
+    var kind = posKindOf(rec);
     var box = el('div', 'iw');
     box.appendChild(el('div', 'iw-name', company.company));
     box.appendChild(el('div', 'iw-addr', company.formatted_address || 'ไม่มีที่อยู่จาก Google'));
-    var exact = company.accuracy === 'exact';
-    box.appendChild(el('div', 'iw-acc ' + (exact ? 'exact' : 'approx'),
-      exact ? 'ที่อยู่จาก Google · ตรงชื่อบริษัท' : 'ประมาณ · ชื่อที่ Google คืนไม่ตรงกับชื่อบริษัท'));
+    var accClass = kind === 'search' ? 'found'
+      : (kind === 'override' ? 'fixed' : (company.accuracy === 'exact' ? 'exact' : 'approx'));
+    box.appendChild(el('div', 'iw-acc ' + accClass, currentLabel(rec)));
+    var pos = rec.position ? rec.position() : null;
+    if (pos) {
+      box.appendChild(el('div', 'iw-coords', 'พิกัด ' + pos.lat.toFixed(5) + ', ' + pos.lng.toFixed(5)
+        + ' · ลากหมุดเพื่อแก้ตำแหน่งได้'));
+    }
+    if (company.accuracy !== 'exact' || kind) {
+      var find = el('button', 'findbtn iw-find', 'ค้นหาใน Google');
+      find.type = 'button';
+      find.dataset.company = company.company;
+      box.appendChild(find);
+    }
     var jobs = company.jobs || [];
     var list = el('ul', 'iw-jobs');
     jobs.forEach(function (job) {
@@ -793,6 +1181,220 @@ window.MAPDATA = __MAPDATA__;
     if (!jobs.length) list.appendChild(el('li', 'iw-empty', 'ไม่มีงานของบริษัทนี้ในชุดที่แสดง'));
     box.appendChild(list);
     return box;
+  }
+
+  /* เขียนผลค้นหา/ผลลากลงแถวในแผง (off-map หรือพิกัดหยาบ) — ไม่มีแถวก็ไม่เป็นไร */
+  function updateRow(company, text) {
+    var rows = document.querySelectorAll('#offlist li, #approxlist li');
+    for (var i = 0; i < rows.length; i++) {
+      var res = rows[i].querySelector('.findres');
+      if (!res) continue;
+      var btn = rows[i].querySelector('button.findbtn');
+      if (!btn || btn.dataset.company !== company) continue;
+      res.textContent = text;
+      res.hidden = false;
+    }
+  }
+
+  /* ---------- ค้นหาใน Google = Places API (New) REST places:searchText ----------
+     ตัวเก่าแบบ legacy (google.maps.places.* คลาสเก่า) ใช้กับคีย์ชุดนี้ไม่ได้
+     → LegacyApiNotActivatedMapError · คีย์ที่ใช้ = คีย์เดียวกับที่ฝังในหน้านี้ ไม่ hardcode ใหม่
+     fetch ถูกบล็อก/ล้มเหลว → ถอยไป importLibrary("places") + Place.searchByText */
+  var PLACES_URL = 'https://places.googleapis.com/v1/places:searchText';
+  var PLACES_FIELDS = 'places.displayName,places.formattedAddress,places.location,places.addressComponents';
+  var PLACES_KEY = __PLACES_KEY__;
+
+  /* ผลลัพธ์ Places (New) → {lat,lng,formattedAddress,components} · ไม่มีพิกัด = null (ไม่เดาพิกัด) */
+  function normalizePlace(place) {
+    if (!place) return null;
+    var loc = place.location || {};
+    var lat = typeof loc.lat === 'function' ? loc.lat()
+      : (loc.latitude !== undefined ? Number(loc.latitude) : Number(loc.lat));
+    var lng = typeof loc.lng === 'function' ? loc.lng()
+      : (loc.longitude !== undefined ? Number(loc.longitude) : Number(loc.lng));
+    if (!isFinite(lat) || !isFinite(lng)) return null;
+    return {
+      lat: lat,
+      lng: lng,
+      formattedAddress: String(place.formattedAddress || place.formatted_address || ''),
+      components: place.addressComponents || place.address_components || []
+    };
+  }
+
+  function searchByFetch(query) {
+    return fetch(PLACES_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': PLACES_KEY,
+        'X-Goog-FieldMask': PLACES_FIELDS
+      },
+      body: JSON.stringify({ textQuery: query, languageCode: 'th', regionCode: 'TH', pageSize: 1 })
+    }).then(function (response) {
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      return response.json();
+    }).then(function (data) {
+      return normalizePlace(((data && data.places) || [])[0]);
+    });
+  }
+
+  function searchBySdk(query) {
+    return google.maps.importLibrary('places').then(function (lib) {
+      if (!lib || !lib.Place || typeof lib.Place.searchByText !== 'function') {
+        throw new Error('ไลบรารี places ไม่มี Place.searchByText');
+      }
+      return lib.Place.searchByText({
+        textQuery: query,
+        fields: ['displayName', 'formattedAddress', 'location', 'addressComponents'],
+        language: 'th',
+        region: 'TH',
+        maxResultCount: 1
+      });
+    }).then(function (res) {
+      return normalizePlace(((res && res.places) || [])[0]);
+    });
+  }
+
+  /* → Promise<place|null> · null = ไม่พบผลลัพธ์จริง (ไม่เดาพิกัด) · reject = ยิงไม่สำเร็จ */
+  function searchPlaces(query) {
+    if (!window.google || !google.maps || typeof fetch !== 'function') return searchBySdk(query);
+    return searchByFetch(query).catch(function () { return searchBySdk(query); });
+  }
+
+  /* จังหวัด (ในไทย) หรือชื่อประเทศ (นอกไทย) จาก addressComponents — อยู่นอกกรุงเทพเท่านั้น */
+  function placeWhere(place) {
+    var comps = (place && place.components) || [];
+    var country = null, admin = null;
+    comps.forEach(function (comp) {
+      var types = comp.types || [];
+      if (types.indexOf('country') >= 0) country = comp;
+      if (types.indexOf('administrative_area_level_1') >= 0) admin = comp;
+    });
+    function longText(comp) {
+      if (!comp) return '';
+      return String(comp.longText || comp.long_name || comp.shortText || comp.short_name || '');
+    }
+    function shortText(comp) {
+      if (!comp) return '';
+      return String(comp.shortText || comp.short_name || comp.longText || comp.long_name || '');
+    }
+    var addr = String((place && place.formattedAddress) || '');
+    var bangkok = /กรุงเทพ|Bangkok/i.test(addr)
+      || /Bangkok|กรุงเทพ/i.test(longText(admin) + ' ' + shortText(admin));
+    if (bangkok) return '';
+    if (country && shortText(country).toUpperCase() !== 'TH') return longText(country);
+    if (admin) return longText(admin);
+    if (country) return longText(country);
+    /* ไม่มี components → parse จาก formattedAddress: ท่อนที่มีรหัสไปรษณีย์ = จังหวัด · ไม่มี → ท่อนสุดท้าย (ประเทศ) */
+    var parts = addr.split(',');
+    for (var i = parts.length - 1; i >= 0; i--) {
+      if (/\d{5}/.test(parts[i])) return parts[i].replace(/\d{5}/, '').replace(/\s+/g, ' ').trim();
+    }
+    return parts.length > 1 ? String(parts[parts.length - 1]).trim() : '';
+  }
+
+  /* ปุ่ม "ค้นหาใน Google" (แยก): ผลแรกที่มีพิกัด → ปักหมุด + บันทึกใน jobboard.pinpos */
+  function searchCompany(company) {
+    if (!state.map) { notice('ยังโหลดแผนที่ไม่เสร็จ — รอสักครู่แล้วกดใหม่'); return; }
+    var chk = document.getElementById('searchbkk');
+    var query = String(company) + (chk && chk.checked ? ' กรุงเทพ' : '');
+    updateRow(company, 'กำลังค้นหา: ' + query);
+    searchPlaces(query).then(function (place) {
+      if (!place) { updateRow(company, 'Google ไม่พบผลลัพธ์'); return; }
+      var where = placeWhere(place);
+      var label = 'Google · ค้นหาใหม่' + (where ? ' · ' + where : '');
+      var rec = applyCompanyPosition(company, place.lat, place.lng, label, 'search');
+      savePosition(company, place.lat, place.lng, label, 'search');
+      if (rec) {
+        if (place.formattedAddress) rec.company.formatted_address = place.formattedAddress;
+        paintCompany(rec);
+      }
+      updateRow(company, label + ' → ปักหมุดแล้ว');
+      applyView(false);
+      if (rec) openInfo(rec);
+    }).catch(function (err) {
+      updateRow(company, 'ค้นหาไม่สำเร็จ (' + String((err && err.message) || err) + ')');
+    });
+  }
+
+  function onDragEnd(rec) {
+    var pos = rec.position ? rec.position() : null;
+    if (!pos) return;
+    rec.posLabel = 'ตำแหน่งที่แก้เอง';
+    rec.posKind = 'override';
+    paintCompany(rec);
+    savePosition(rec.company.company, pos.lat, pos.lng, rec.posLabel, 'drag');
+    updateRow(rec.company.company, 'ตำแหน่งที่แก้เอง → ' + pos.lat.toFixed(5) + ', ' + pos.lng.toFixed(5));
+    if (openRec === rec) openInfo(rec);
+  }
+
+  /* หมุดหนึ่งอัน: มาจาก build หรือจากผลค้นหา/พิกัดที่แก้เอง · ลากได้ทั้งคู่ */
+  function makeRecord(company, position, posLabel, posKind) {
+    var exact = company.accuracy === 'exact';
+    var rec, marker;
+    if (AdvancedMarker) {
+      var wrap = el('div', 'pinwrap');
+      var pin = el('div', 'pin ' + (exact ? 'exact' : 'approx'));
+      pin.setAttribute('role', 'button');
+      var badge = el('span', 'pinbadge', '');
+      wrap.appendChild(pin);
+      wrap.appendChild(badge);
+      marker = new AdvancedMarker({ map: state.map, position: position, title: company.company, content: wrap });
+      marker.gmpDraggable = true;   /* แอตทริบิวต์ gmp-draggable: ลากหมุดเพื่อแก้พิกัดได้ */
+      rec = { kind: 'adv', wrap: wrap, pin: pin, badge: badge, marker: marker, company: company,
+              exact: exact, posLabel: posLabel || '', posKind: posKind || '', visible: true };
+      marker.addListener('gmp-dragend', function () { onDragEnd(rec); });
+    } else {
+      marker = new google.maps.Marker({
+        map: state.map,
+        position: position,
+        title: company.company,
+        draggable: true,
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 7,
+          fillColor: exact ? EXACT_COLOR : APPROX_COLOR,
+          fillOpacity: 1,
+          strokeColor: '#ffffff',
+          strokeWeight: 2
+        }
+      });
+      marker.addListener('dragend', function () { onDragEnd(rec); });
+      rec = { kind: 'legacy', marker: marker, company: company, exact: exact,
+              posLabel: posLabel || '', posKind: posKind || '', visible: true };
+    }
+    rec.position = function () {
+      return rec.kind === 'adv' ? toLatLng(rec.marker.position) : toLatLng(rec.marker.getPosition());
+    };
+    marker.addListener('click', function () { openInfo(rec); });
+    company.lat = position.lat;
+    company.lng = position.lng;
+    records.push(rec);
+    recsByCompany[company.company] = rec;
+    return rec;
+  }
+
+  /* ย้าย/สร้างหมุดของบริษัทหนึ่งตามพิกัดที่กำหนด แล้วติดป้ายตามชนิด (search/override) */
+  function applyCompanyPosition(name, lat, lng, label, kind) {
+    if (!state.map) return null;
+    var rec = recsByCompany[name];
+    var company;
+    if (rec) {
+      try {
+        if (rec.kind === 'adv') rec.marker.position = { lat: lat, lng: lng };
+        else rec.marker.setPosition({ lat: lat, lng: lng });
+      } catch (e) { /* ไม่เป็นไร */ }
+      company = rec.company;
+    } else {
+      company = findCompany(name);
+      rec = makeRecord(company, { lat: lat, lng: lng }, label, kind);
+    }
+    company.lat = lat;
+    company.lng = lng;
+    rec.posLabel = label || '';
+    rec.posKind = kind || '';
+    paintCompany(rec);
+    return rec;
   }
 
   window.initMap = function () {
@@ -817,50 +1419,29 @@ window.MAPDATA = __MAPDATA__;
       return;
     }
     state.map = map;
-    var info = new google.maps.InfoWindow({ maxWidth: 340 });
-    var Advanced = google.maps.marker && google.maps.marker.AdvancedMarkerElement
+    state.info = new google.maps.InfoWindow({ maxWidth: 340 });
+    AdvancedMarker = google.maps.marker && google.maps.marker.AdvancedMarkerElement
       ? google.maps.marker.AdvancedMarkerElement : null;
-    function openInfo(company, anchor) {
-      info.setContent(infoNode(company));
-      info.open({ map: map, anchor: anchor });
-    }
     records = [];
+    recsByCompany = {};
+    var failed = 0;
     (DATA.companies || []).forEach(function (company) {
       if (typeof company.lat !== 'number' || typeof company.lng !== 'number') return;
-      var position = { lat: company.lat, lng: company.lng };
-      var exact = company.accuracy === 'exact';
-      var marker, rec;
-      if (Advanced) {
-        var wrap = el('div', 'pinwrap');
-        var pin = el('div', 'pin ' + (exact ? 'exact' : 'approx'), String((company.jobs || []).length));
-        pin.setAttribute('role', 'button');
-        pin.setAttribute('aria-label', company.company);
-        var badge = el('span', 'pinbadge', '');
-        wrap.appendChild(pin);
-        wrap.appendChild(badge);
-        marker = new Advanced({ map: map, position: position, title: company.company, content: wrap });
-        rec = { kind: 'adv', wrap: wrap, pin: pin, badge: badge, marker: marker, company: company, exact: exact };
-      } else {
-        marker = new google.maps.Marker({
-          map: map,
-          position: position,
-          title: company.company,
-          icon: {
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: 8,
-            fillColor: exact ? EXACT_COLOR : APPROX_COLOR,
-            fillOpacity: 1,
-            strokeColor: '#ffffff',
-            strokeWeight: 2
-          }
-        });
-        rec = { kind: 'legacy', marker: marker, company: company, exact: exact };
-      }
-      marker.addListener('click', function () { openInfo(company, marker); });
-      records.push(rec);
-      paintCompany(rec);
+      try {
+        var rec = makeRecord(company, { lat: company.lat, lng: company.lng }, '', '');
+        paintCompany(rec);
+      } catch (e) { failed++; }
+    });
+    if (failed) notice('สร้างหมุดไม่ได้ ' + failed + ' รายการ — แผงรายชื่อด้านขวายังใช้ได้');
+    /* พิกัดที่แก้เองจาก localStorage['jobboard.pinpos'] ทับพิกัดที่ build มา + สร้างหมุดให้บริษัทที่ยังไม่มีหมุด */
+    Object.keys(posStore).forEach(function (name) {
+      var pos = posStore[name];
+      var label = pos.label || 'ตำแหน่งที่แก้เอง';
+      var kind = (pos.by === 'search' || label.indexOf('Google · ค้นหาใหม่') === 0) ? 'search' : 'override';
+      try { applyCompanyPosition(name, pos.lat, pos.lng, label, kind); } catch (e) { /* หมุดเดียวเสียไม่ทำให้ทั้งหน้าพัง */ }
     });
     READY = true;
+    updateExportUI();
     applyView(fromQueryView !== null);   /* โหมดเริ่มต้นคงเดิม (center กรุงเทพ) เว้นแต่ URL ระบุมา */
   };
 
@@ -887,8 +1468,34 @@ window.MAPDATA = __MAPDATA__;
       applyView(true);
     });
   }
+  /* ปุ่ม "ค้นหาใน Google" — ใช้ร่วมกันทั้งแผง off-map, แผงพิกัดหยาบ และ info window */
+  document.addEventListener('click', function (ev) {
+    var target = ev.target;
+    var btn = target && target.closest ? target.closest('button.findbtn') : null;
+    if (!btn) return;
+    ev.preventDefault();
+    var company = String(btn.dataset.company || '').trim();
+    if (company) searchCompany(company);
+  });
+
+  var exportBtn = document.getElementById('exportbtn');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', function () {
+      updateExportUI();
+      var box = document.getElementById('exportbox');
+      if (box) box.hidden = false;
+      var text = document.getElementById('exporttext');
+      if (text) { text.focus(); try { text.select(); } catch (e) { /* ไม่เป็นไร */ } }
+    });
+  }
+  var copyBtn = document.getElementById('exportcopy');
+  if (copyBtn) copyBtn.addEventListener('click', copyExport);
+  var dlBtn = document.getElementById('exportdl');
+  if (dlBtn) dlBtn.addEventListener('click', downloadExport);
+
   renderPanel();
   updateViewUI();
+  updateExportUI();
 
   window.addEventListener('load', function () {
     setTimeout(function () {
@@ -900,7 +1507,7 @@ window.MAPDATA = __MAPDATA__;
 })();
 </script>
 <script async
-  src="https://maps.googleapis.com/maps/api/js?key=__KEY__&amp;language=th&amp;region=TH&amp;libraries=marker&amp;loading=async&amp;callback=initMap&amp;v=weekly"></script>
+  src="https://maps.googleapis.com/maps/api/js?key=__KEY__&amp;language=th&amp;region=TH&amp;libraries=marker,places&amp;loading=async&amp;callback=initMap&amp;v=weekly"></script>
 </body>
 </html>
 """
