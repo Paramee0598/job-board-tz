@@ -23,6 +23,8 @@
     ไฟล์นี้สร้างจากปุ่ม "ส่งออกพิกัดที่แก้ (N)" บนหน้า map — ไม่มีไฟล์/อ่านไม่ได้ = ใช้พิกัด geocode ตามเดิม ไม่พัง
   · หมุดเล็กลง 12px (เดิม 28px) แต่พื้นที่กด 28px (.pinwrap padding) · ลากหมุดแก้พิกัดได้
     (AdvancedMarkerElement gmpDraggable + event gmp-dragend → localStorage['jobboard.pinpos'])
+  · โหมดลากหมุด (สวิตช์บนหน้า): ค่าเริ่มต้นปิด = หมุดลากไม่ได้ เก็บใน localStorage['jobboard.dragmode']
+    ('on'/'off') · ?drag=1 เปิดจาก URL · ตอนปิด drag ที่ค้างไม่เขียน jobboard.pinpos
   · ปุ่ม "ค้นหาใน Google" แยกจากปุ่มอื่น — Places API (New) REST places:searchText ฝั่งเบราว์เซอร์
     (PlacesService แบบ legacy ใช้กับคีย์ชุดนี้ไม่ได้: LegacyApiNotActivatedMapError)
     fetch ล้มเหลว/ถูกบล็อก → ถอยไป google.maps.importLibrary("places") + Place.searchByText
@@ -528,6 +530,8 @@ aside .hint{margin:0;padding:8px 12px;font-size:12px;color:var(--muted);border-b
    ให้ "จุด" อยู่ที่พิกัดจริง ไม่ใช่มุมล่าง (ไม่มี anchorPoint ใน API รุ่นนี้) */
 .pinwrap{position:relative;display:inline-flex;align-items:center;justify-content:center;padding:8px;cursor:pointer;
  transform:translateY(14px)}
+.pinwrap[data-draggable="true"],.pinwrap[data-draggable="true"] .pin{cursor:grab}
+.pinwrap[data-draggable="true"]:active,.pinwrap[data-draggable="true"] .pin:active{cursor:grabbing}
 .pinwrap.pinned .pin{box-shadow:0 0 0 2px #fff,0 0 0 4px var(--pin),0 2px 7px rgba(0,0,0,.45)}
 .pinbadge{display:none;position:absolute;top:-2px;right:-6px;background:#fff;border:1px solid var(--pin);
  color:var(--pin);font-size:10.5px;font-weight:700;border-radius:999px;padding:0 4px;line-height:15px;white-space:nowrap}
@@ -613,6 +617,10 @@ footer a{display:inline-block;padding:4px 2px;line-height:16px}
     <span>ไม่พบบนแผนที่ <b id="statOffmap">__N_OFFMAP__</b></span>
     <span>งานในบริษัทเหล่านี้ <b>__N_JOBS__</b></span>
     <span>งานที่ปักหมุด <b id="pinStat">0</b></span>
+  </div>
+  <div class="viewbar" id="dragbar" role="group" aria-label="โหมดลากหมุด">
+    <button type="button" class="viewbtn" id="dragbtn" aria-pressed="false">🖐️ โหมดลากหมุด: ปิด</button>
+    <span class="posnote" id="draghint" hidden>เปิดโหมดลากหมุดแล้ว — ลากหมุดไปยังตำแหน่งที่ถูกต้อง แล้วกดส่งออกพิกัดที่แก้</span>
   </div>
   <div class="viewbar" id="viewbar" role="group" aria-label="มุมมองหมุดบนแผนที่">
     <button type="button" class="viewbtn" data-view="all" aria-pressed="false">ทั้งหมด (__N_ONMAP__)</button>
@@ -897,6 +905,57 @@ window.MAPDATA = __MAPDATA__;
   var fromQueryView = queryView();
   var view = fromQueryView || readView() || DEFAULT_VIEW;
   writeView(view);
+
+  /* ---------- โหมดลากหมุด: ค่าเริ่มต้นปิด (กันเผลอลากหมุด)
+     อ่าน: ?drag=1 (ทับ) · ไม่งั้น localStorage['jobboard.dragmode'] ('on'/'off') · ไม่มี/ไม่ถูกต้อง → off
+     ปิด = หมุดทุกตัวลากไม่ได้ และ drag ที่ค้างอยู่ไม่เขียน jobboard.pinpos */
+  var DRAG_KEY = 'jobboard.dragmode';
+
+  function readDragMode() {
+    try { return String(localStorage.getItem(DRAG_KEY) || '') === 'on'; } catch (e) { return false; }
+  }
+
+  function writeDragMode(on) {
+    try { localStorage.setItem(DRAG_KEY, on ? 'on' : 'off'); } catch (e) { /* localStorage ปิด (file:// ที่บล็อก) */ }
+  }
+
+  function queryDragMode() {
+    try {
+      var params = new URLSearchParams(String(window.location.search || ''));
+      if (!params.has('drag')) return null;
+      var value = String(params.get('drag') || '').trim().toLowerCase();
+      return value === '1' || value === 'on' || value === 'true';
+    } catch (e) { return null; }
+  }
+
+  var fromQueryDrag = queryDragMode();
+  var dragMode = fromQueryDrag === null ? readDragMode() : fromQueryDrag;
+  writeDragMode(dragMode);
+
+  /* หมุดหนึ่งตัวรับสถานะสวิตช์ — จุดเดียวที่ตั้ง draggable (ทุกเส้นทางที่สร้างหมุดเรียกผ่าน makeRecord) */
+  function applyDrag(rec) {
+    try {
+      if (rec.kind === 'adv') rec.marker.gmpDraggable = dragMode;
+      else rec.marker.setDraggable(dragMode);
+    } catch (e) { /* ไม่เป็นไร */ }
+    if (rec.wrap) rec.wrap.setAttribute('data-draggable', dragMode ? 'true' : 'false');
+  }
+
+  function updateDragUI() {
+    document.documentElement.setAttribute('data-dragmode', dragMode ? 'on' : 'off');
+    var btn = document.getElementById('dragbtn');
+    if (btn) {
+      btn.setAttribute('aria-pressed', dragMode ? 'true' : 'false');
+      btn.textContent = dragMode ? '🖐️ โหมดลากหมุด: เปิด — ลากหมุดเพื่อแก้พิกัด' : '🖐️ โหมดลากหมุด: ปิด';
+    }
+    var hint = document.getElementById('draghint');
+    if (hint) hint.hidden = !dragMode;
+  }
+
+  function applyDragMode() {
+    records.forEach(applyDrag);
+    updateDragUI();
+  }
 
   function isPinned(id) {
     return pins.indexOf(String(id === undefined || id === null ? '' : id)) >= 0;
@@ -1318,6 +1377,7 @@ window.MAPDATA = __MAPDATA__;
   }
 
   function onDragEnd(rec) {
+    if (!dragMode) return;   /* สวิตช์ปิด: drag ที่ค้างอยู่ไม่เขียน jobboard.pinpos */
     var pos = rec.position ? rec.position() : null;
     if (!pos) return;
     rec.posLabel = 'ตำแหน่งที่แก้เอง';
@@ -1340,7 +1400,6 @@ window.MAPDATA = __MAPDATA__;
       wrap.appendChild(pin);
       wrap.appendChild(badge);
       marker = new AdvancedMarker({ map: state.map, position: position, title: company.company, content: wrap });
-      marker.gmpDraggable = true;   /* แอตทริบิวต์ gmp-draggable: ลากหมุดเพื่อแก้พิกัดได้ */
       rec = { kind: 'adv', wrap: wrap, pin: pin, badge: badge, marker: marker, company: company,
               exact: exact, posLabel: posLabel || '', posKind: posKind || '', visible: true };
       marker.addListener('gmp-dragend', function () { onDragEnd(rec); });
@@ -1349,7 +1408,6 @@ window.MAPDATA = __MAPDATA__;
         map: state.map,
         position: position,
         title: company.company,
-        draggable: true,
         icon: {
           path: google.maps.SymbolPath.CIRCLE,
           scale: 7,
@@ -1367,6 +1425,7 @@ window.MAPDATA = __MAPDATA__;
       return rec.kind === 'adv' ? toLatLng(rec.marker.position) : toLatLng(rec.marker.getPosition());
     };
     marker.addListener('click', function () { openInfo(rec); });
+    applyDrag(rec);   /* ลากได้เฉพาะตอนสวิตช์เปิด — หมุดที่สร้างใหม่ภายหลังก็ผ่านบรรทัดนี้ */
     company.lat = position.lat;
     company.lng = position.lng;
     records.push(rec);
@@ -1478,6 +1537,15 @@ window.MAPDATA = __MAPDATA__;
     if (company) searchCompany(company);
   });
 
+  var dragBtn = document.getElementById('dragbtn');
+  if (dragBtn) {
+    dragBtn.addEventListener('click', function () {
+      dragMode = !dragMode;
+      writeDragMode(dragMode);
+      applyDragMode();
+    });
+  }
+
   var exportBtn = document.getElementById('exportbtn');
   if (exportBtn) {
     exportBtn.addEventListener('click', function () {
@@ -1496,6 +1564,7 @@ window.MAPDATA = __MAPDATA__;
   renderPanel();
   updateViewUI();
   updateExportUI();
+  applyDragMode();   /* ตั้ง data-dragmode/aria-pressed ก่อน initMap — หมุดที่สร้างทีหลังอ่าน dragMode เอง */
 
   window.addEventListener('load', function () {
     setTimeout(function () {
